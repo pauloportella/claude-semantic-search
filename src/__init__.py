@@ -10,6 +10,7 @@ __version__ = "0.1.0"
 # Package imports
 from .parser import JSONLParser, Conversation, Message
 from .chunker import ConversationChunker, ChunkingConfig, Chunk
+from .embeddings import EmbeddingGenerator, EmbeddingConfig, EmbeddingStats
 
 __all__ = [
     "JSONLParser",
@@ -18,4 +19,7 @@ __all__ = [
     "ConversationChunker",
     "ChunkingConfig",
     "Chunk",
+    "EmbeddingGenerator",
+    "EmbeddingConfig",
+    "EmbeddingStats",
 ]
