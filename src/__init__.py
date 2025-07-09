@@ -9,9 +9,13 @@ __version__ = "0.1.0"
 
 # Package imports
 from .parser import JSONLParser, Conversation, Message
+from .chunker import ConversationChunker, ChunkingConfig, Chunk
 
 __all__ = [
     "JSONLParser",
     "Conversation",
     "Message",
+    "ConversationChunker",
+    "ChunkingConfig",
+    "Chunk",
 ]
