@@ -11,6 +11,7 @@ __version__ = "0.1.0"
 from .parser import JSONLParser, Conversation, Message
 from .chunker import ConversationChunker, ChunkingConfig, Chunk
 from .embeddings import EmbeddingGenerator, EmbeddingConfig, EmbeddingStats
+from .storage import HybridStorage, StorageConfig, SearchConfig, SearchResult
 
 __all__ = [
     "JSONLParser",
@@ -22,4 +23,8 @@ __all__ = [
     "EmbeddingGenerator",
     "EmbeddingConfig",
     "EmbeddingStats",
+    "HybridStorage",
+    "StorageConfig",
+    "SearchConfig",
+    "SearchResult",
 ]
