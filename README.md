@@ -15,7 +15,7 @@ A powerful semantic search system for Claude conversations that enables fast, in
 - **GPU Acceleration**: Optional GPU support for faster search (CUDA/MPS)
 - **Advanced Filtering**:
   - Date ranges (before/after)
-  - Project filtering
+  - Project filtering with partial matching (case-insensitive)
   - Code content filtering
   - Session-based search
   - Related chunk discovery
@@ -83,8 +83,9 @@ uv run claude-index --gpu
 # Basic search
 uv run claude-search "rust programming"
 
-# Search with filters
+# Search with filters (project names support partial matching)
 uv run claude-search "error handling" --project "my-project" --has-code
+uv run claude-search "persistence" --project "daisy-hft"  # Matches any project containing "daisy-hft"
 
 # Limit results
 uv run claude-search "debugging" --top-k 5
