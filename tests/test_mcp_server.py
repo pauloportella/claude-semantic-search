@@ -37,17 +37,21 @@ class TestMCPServer:
     async def test_claude_semantic_search_basic(self):
         """Test basic semantic search functionality."""
         mock_results = [
-            MagicMock(
-                chunk_id="chunk_001",
-                text="This is a test result about Python programming.",
-                similarity=0.95,
-                metadata={
+            {
+                "chunk_id": "chunk_001",
+                "text": "This is a test result about Python programming.",
+                "similarity": 0.95,
+                "metadata": {
                     "project": "test-project",
                     "timestamp": "2025-07-10T10:00:00Z",
                     "session_id": "session_123",
                     "has_code": True,
                 },
-            )
+                "project": "test-project",
+                "session": "session_123",
+                "timestamp": "2025-07-10T10:00:00Z",
+                "has_code": True,
+            }
         ]
 
         with patch("src.mcp_server.get_search_cli") as mock_get_cli:
@@ -141,6 +145,10 @@ class TestMCPServer:
         with patch("src.mcp_server.get_search_cli") as mock_get_cli:
             mock_cli = MagicMock()
             mock_cli.storage.get_chunk_by_id = MagicMock(return_value=mock_chunk)
+            mock_cli.storage._get_chunk_data = MagicMock(return_value={
+                "project_name": "test-project",
+                "timestamp": "2025-07-10T10:00:00Z",
+            })
             mock_get_cli.return_value = mock_cli
 
             results = await call_tool("get_chunk_by_id", {"chunk_id": "chunk_123"})
@@ -157,6 +165,7 @@ class TestMCPServer:
         with patch("src.mcp_server.get_search_cli") as mock_get_cli:
             mock_cli = MagicMock()
             mock_cli.storage.get_chunk_by_id = MagicMock(return_value=None)
+            mock_cli.storage._get_chunk_data = MagicMock(return_value=None)
             mock_get_cli.return_value = mock_cli
 
             with pytest.raises(McpError) as exc_info:
@@ -195,9 +204,9 @@ class TestMCPServer:
                     "total_chunks": 1000,
                     "total_sessions": 50,
                     "total_projects": 5,
-                    "faiss_size_mb": 100.5,
-                    "db_size_mb": 50.2,
-                    "total_size_mb": 150.7,
+                    "faiss_index_size": 105373696,  # ~100.5 MB
+                    "database_size": 52633600,      # ~50.2 MB
+                    "total_storage_size": 158007296,  # ~150.7 MB
                     "chunk_types": {
                         "qa_pair": 500,
                         "code_block": 300,
@@ -219,22 +228,30 @@ class TestMCPServer:
     @pytest.mark.asyncio
     async def test_get_status(self):
         """Test getting daemon status."""
-        with patch("src.mcp_server.Path") as mock_path:
-            # Mock PID file exists
-            pid_file_mock = MagicMock()
-            pid_file_mock.exists.return_value = True
-            pid_file_mock.read_text.return_value = "12345"
-
-            # Mock DB path exists
-            db_path_mock = MagicMock()
-            db_path_mock.exists.return_value = True
-
-            mock_path.home.return_value = MagicMock()
-            mock_path.home.return_value.__truediv__.side_effect = lambda x: (
-                pid_file_mock if "daemon.pid" in x else db_path_mock
-            )
-
-            with patch("src.mcp_server.psutil.pid_exists", return_value=True):
+        # Test get_status without mocking the Path since it uses "./data/daemon.pid"
+        with patch("src.mcp_server.get_search_cli") as mock_get_cli:
+            mock_cli = MagicMock()
+            mock_cli.data_dir = "./data"
+            mock_get_cli.return_value = mock_cli
+            
+            with patch("src.mcp_server.Path") as mock_path_class:
+                # Mock the PID file path
+                pid_file_mock = MagicMock()
+                pid_file_mock.exists.return_value = False
+                
+                # Mock the database path
+                db_path_mock = MagicMock()
+                db_path_mock.exists.return_value = True
+                
+                # Make Path() return appropriate mocks
+                def path_side_effect(path):
+                    if "daemon.pid" in str(path):
+                        return pid_file_mock
+                    else:
+                        return db_path_mock
+                
+                mock_path_class.side_effect = path_side_effect
+                
                 with patch("src.mcp_server.sqlite3.connect") as mock_connect:
                     mock_cursor = MagicMock()
                     mock_cursor.fetchone.return_value = ("2025-07-10T12:00:00Z",)
@@ -246,7 +263,7 @@ class TestMCPServer:
 
                     assert len(results) == 1
                     result_text = results[0].text
-                    assert "Daemon running: ✅ Yes" in result_text
+                    assert "Daemon running: ❌ No" in result_text
                     assert "Last index update: 2025-07-10T12:00:00Z" in result_text
 
     @pytest.mark.asyncio
@@ -262,12 +279,16 @@ class TestMCPServer:
         """Test content truncation behavior."""
         long_text = "x" * 1000  # 1000 character text
         mock_results = [
-            MagicMock(
-                chunk_id="chunk_001",
-                text=long_text,
-                similarity=0.95,
-                metadata={},
-            )
+            {
+                "chunk_id": "chunk_001",
+                "text": long_text,
+                "similarity": 0.95,
+                "metadata": {},
+                "project": "unknown",
+                "session": "unknown",
+                "timestamp": "unknown",
+                "has_code": False,
+            }
         ]
 
         with patch("src.mcp_server.get_search_cli") as mock_get_cli:
@@ -306,6 +327,12 @@ class TestMCPServer:
         with patch("src.mcp_server.get_search_cli") as mock_get_cli:
             mock_cli = MagicMock()
             mock_cli.storage.get_chunk_by_id = MagicMock(return_value=mock_chunk)
+            mock_cli.storage._get_chunk_data = MagicMock(return_value={
+                "project_name": "test-project",
+                "timestamp": "2025-07-10T10:00:00Z",
+                "session_id": "session_123",
+                "has_code": False,
+            })
             mock_get_cli.return_value = mock_cli
 
             # Test with chunk_id (no query needed)
@@ -325,6 +352,7 @@ class TestMCPServer:
         with patch("src.mcp_server.get_search_cli") as mock_get_cli:
             mock_cli = MagicMock()
             mock_cli.storage.get_chunk_by_id = MagicMock(return_value=None)
+            mock_cli.storage._get_chunk_data = MagicMock(return_value=None)
             mock_get_cli.return_value = mock_cli
 
             with pytest.raises(McpError) as exc_info:

@@ -148,12 +148,15 @@ async def call_tool(name: str, arguments: Any) -> List[TextContent]:
             chunk = await asyncio.to_thread(cli.storage.get_chunk_by_id, chunk_id)
             
             if chunk:
+                # Get metadata from database for display
+                chunk_data = await asyncio.to_thread(cli.storage._get_chunk_data, chunk_id)
+                
                 return [
                     TextContent(
                         type="text",
                         text=f"**Chunk ID**: {chunk_id}\n"
-                        f"**Project**: {chunk.metadata.get('project', 'Unknown')}\n"
-                        f"**Time**: {chunk.metadata.get('timestamp', 'Unknown')}\n\n"
+                        f"**Project**: {chunk_data.get('project_name', 'Unknown') if chunk_data else 'Unknown'}\n"
+                        f"**Time**: {chunk_data.get('timestamp', 'Unknown') if chunk_data else 'Unknown'}\n\n"
                         f"{chunk.text}",
                     )
                 ]
@@ -205,18 +208,18 @@ async def call_tool(name: str, arguments: Any) -> List[TextContent]:
         output = []
         for i, result in enumerate(results, 1):
             # Truncate content unless full_content is requested
-            content = result.text
+            content = result['text']
             if not full_content and len(content) > 500:
                 content = content[:500] + "..."
 
             output.append(
-                f"### Result {i} [Similarity: {result.similarity:.3f}]\n"
-                f"**Chunk ID**: {result.chunk_id}\n"
-                f"**Project**: {result.metadata.get('project', 'Unknown')}\n"
-                f"**Time**: {result.metadata.get('timestamp', 'Unknown')}\n"
-                f"**Session**: {result.metadata.get('session_id', 'Unknown')}\n\n"
+                f"### Result {i} [Similarity: {result['similarity']:.3f}]\n"
+                f"**Chunk ID**: {result['chunk_id']}\n"
+                f"**Project**: {result.get('project', 'Unknown')}\n"
+                f"**Time**: {result.get('timestamp', 'Unknown')}\n"
+                f"**Session**: {result.get('session', 'Unknown')}\n\n"
                 f"{content}\n"
-                f"{'🔧 Contains code' if result.metadata.get('has_code') else ''}\n"
+                f"{'🔧 Contains code' if result.get('has_code') else ''}\n"
                 f"---\n"
             )
 
@@ -234,12 +237,15 @@ async def call_tool(name: str, arguments: Any) -> List[TextContent]:
         chunk = await asyncio.to_thread(cli.storage.get_chunk_by_id, chunk_id)
 
         if chunk:
+            # Get metadata from database for display
+            chunk_data = await asyncio.to_thread(cli.storage._get_chunk_data, chunk_id)
+            
             return [
                 TextContent(
                     type="text",
                     text=f"**Chunk ID**: {chunk_id}\n"
-                    f"**Project**: {chunk.metadata.get('project', 'Unknown')}\n"
-                    f"**Time**: {chunk.metadata.get('timestamp', 'Unknown')}\n\n"
+                    f"**Project**: {chunk_data.get('project_name', 'Unknown') if chunk_data else 'Unknown'}\n"
+                    f"**Time**: {chunk_data.get('timestamp', 'Unknown') if chunk_data else 'Unknown'}\n\n"
                     f"{chunk.text}",
                 )
             ]
@@ -270,9 +276,9 @@ async def call_tool(name: str, arguments: Any) -> List[TextContent]:
                 f"- Total chunks: {stats['total_chunks']:,}\n"
                 f"- Total sessions: {stats['total_sessions']:,}\n"
                 f"- Total projects: {stats['total_projects']:,}\n"
-                f"- Index size: {stats['faiss_size_mb']:.1f} MB\n"
-                f"- Database size: {stats['db_size_mb']:.1f} MB\n"
-                f"- Total storage: {stats['total_size_mb']:.1f} MB\n\n"
+                f"- Index size: {stats.get('faiss_index_size', 0) / 1024 / 1024:.1f} MB\n"
+                f"- Database size: {stats.get('database_size', 0) / 1024 / 1024:.1f} MB\n"
+                f"- Total storage: {stats.get('total_storage_size', 0) / 1024 / 1024:.1f} MB\n\n"
                 f"**Chunk Types**:\n"
                 + "\n".join(f"- {k}: {v:,}" for k, v in stats.get("chunk_types", {}).items()),
             )
