@@ -329,7 +329,6 @@ class TestCLICommands:
             'search', 'test query',
             '--project', 'test_project',
             '--has-code',
-            '--has-tools',
             '--top-k', '5'
         ])
         
@@ -342,7 +341,6 @@ class TestCLICommands:
         assert args[0] == "test query"
         assert args[1]['project_name'] == 'test_project'  # filters is second positional arg
         assert args[1]['has_code'] is True
-        assert args[1]['has_tools'] is True
         assert args[2] == 5  # top_k is third positional arg
     
     @patch('src.cli.SemanticSearchCLI.search_conversations')
