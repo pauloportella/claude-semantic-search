@@ -58,21 +58,18 @@ Add the claude-search server to your configuration:
   "mcpServers": {
     // ... other servers ...
     "claude-search": {
-      "command": "/path/to/semantic-search/.venv/bin/python",
-      "args": ["-m", "src.mcp_server"],
-      "cwd": "/path/to/semantic-search",
-      "env": {
-        "PYTHONPATH": "/path/to/semantic-search"
-      }
+      "command": "/Users/USERNAME/.local/bin/uv",
+      "args": ["run", "--directory", "/path/to/semantic-search", "claude-search-mcp"],
+      "cwd": "/path/to/semantic-search"
     }
   }
 }
 ```
 
 **Important**: 
-- Replace `/path/to/semantic-search` with your actual path
+- Replace `/Users/USERNAME/.local/bin/uv` with your actual UV path (find it with `which uv`)
+- Replace `/path/to/semantic-search` with your actual project path
 - Ensure the JSON is properly formatted (no line breaks in strings)
-- The `PYTHONPATH` environment variable is required for module imports
 
 ### 4. Restart Claude Desktop or Cursor
 

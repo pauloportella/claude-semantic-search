@@ -373,6 +373,7 @@ Add to `~/.cursor/mcp.json`:
   }
 }
 ```
+**Note**: Replace `/Users/USERNAME/.local/bin/uv` with your actual UV path (find it with `which uv`)
 
 ### Available MCP Tools
 
