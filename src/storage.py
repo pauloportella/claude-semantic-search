@@ -5,6 +5,8 @@ This module provides the HybridStorage class that manages both vector embeddings
 and metadata for efficient semantic search with filtering capabilities.
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import pickle
@@ -12,14 +14,30 @@ import sqlite3
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Dict,
+    Final,
+    List,
+    Literal,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+    cast,
+)
 
 import faiss
 import numpy as np
+from numpy.typing import NDArray
 from tqdm import tqdm
 
 from .chunker import Chunk
-from .gpu_utils import assess_gpu_capability, log_gpu_status
+from .gpu_utils import GPUCapability, assess_gpu_capability, log_gpu_status
+
+if TYPE_CHECKING:
+    import numpy.typing as npt
 
 
 @dataclass
@@ -65,16 +83,16 @@ class SearchResult:
 class HybridStorage:
     """Hybrid storage combining FAISS and SQLite for semantic search."""
 
-    def __init__(self, config: Optional[StorageConfig] = None):
-        self.config = config or StorageConfig()
-        self.logger = logging.getLogger(__name__)
+    def __init__(self, config: Optional[StorageConfig] = None) -> None:
+        self.config: StorageConfig = config or StorageConfig()
+        self.logger: logging.Logger = logging.getLogger(__name__)
 
         # Initialize storage paths
-        self.data_dir = Path(self.config.data_dir)
+        self.data_dir: Path = Path(self.config.data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
 
-        self.db_path = self.data_dir / self.config.db_name
-        self.index_path = self.data_dir / self.config.index_name
+        self.db_path: Path = self.data_dir / self.config.db_name
+        self.index_path: Path = self.data_dir / self.config.index_name
 
         # Storage components
         self.db: Optional[sqlite3.Connection] = None
@@ -83,9 +101,9 @@ class HybridStorage:
         self.faiss_id_to_chunk_id: Dict[int, str] = {}
 
         # GPU components
-        self._gpu_capability = None
-        self._gpu_resources = None
-        self._is_gpu_index = False
+        self._gpu_capability: Optional[GPUCapability] = None
+        self._gpu_resources: Optional[Any] = None  # faiss.StandardGpuResources when available
+        self._is_gpu_index: bool = False
 
         # If GPU is requested, assess capability
         if self.config.use_gpu:
@@ -106,8 +124,8 @@ class HybridStorage:
                 )
 
         # Stats
-        self.total_chunks = 0
-        self.embedding_dim = self.config.embedding_dim
+        self.total_chunks: int = 0
+        self.embedding_dim: int = self.config.embedding_dim
 
     def initialize(self) -> None:
         """Initialize the storage components."""
@@ -382,7 +400,7 @@ class HybridStorage:
 
     def search(
         self,
-        query_embedding: np.ndarray,
+        query_embedding: NDArray[np.float32],
         config: Optional[SearchConfig] = None,
         filters: Optional[Dict[str, Any]] = None,
     ) -> List[SearchResult]:
@@ -465,9 +483,12 @@ class HybridStorage:
 
     def _get_chunk_data(self, chunk_id: str) -> Optional[Dict[str, Any]]:
         """Get chunk data from database."""
-        cursor = self.db.cursor()
+        if not self.db:
+            raise RuntimeError("Database not initialized")
+            
+        cursor: sqlite3.Cursor = self.db.cursor()
         cursor.execute("SELECT * FROM chunks WHERE id = ?", (chunk_id,))
-        row = cursor.fetchone()
+        row: Optional[sqlite3.Row] = cursor.fetchone()
 
         if row:
             # Convert sqlite3.Row to dict
@@ -626,6 +647,13 @@ class HybridStorage:
         cursor.execute("SELECT chunk_type, COUNT(*) FROM chunks GROUP BY chunk_type")
         chunk_types = dict(cursor.fetchall())
 
+        # Get list of all projects
+        try:
+            projects = self.get_all_projects()
+        except Exception as e:
+            self.logger.warning(f"Failed to get projects list: {e}")
+            projects = []
+
         # Storage sizes
         faiss_size = self.index_path.stat().st_size if self.index_path.exists() else 0
         db_size = self.db_path.stat().st_size if self.db_path.exists() else 0
@@ -634,6 +662,7 @@ class HybridStorage:
             "total_chunks": total_chunks,
             "total_sessions": total_sessions,
             "total_projects": total_projects,
+            "projects": projects,  # Include the actual list of projects
             "chunk_types": chunk_types,
             "faiss_index_size": faiss_size,
             "database_size": db_size,
@@ -662,6 +691,44 @@ class HybridStorage:
                 )
 
         return stats
+
+    def get_all_projects(self) -> List[str]:
+        """
+        Get a list of all distinct project names in the database.
+        
+        Returns:
+            List[str]: Sorted list of unique project names.
+        
+        Raises:
+            sqlite3.Error: If there's a database error.
+        """
+        if not self.db:
+            raise RuntimeError("Database not initialized. Call initialize() first.")
+        
+        try:
+            cursor = self.db.cursor()
+            cursor.execute(
+                """
+                SELECT DISTINCT project_name 
+                FROM chunks 
+                WHERE project_name IS NOT NULL AND project_name != ''
+                ORDER BY project_name
+                """
+            )
+            
+            # Extract project names from query results
+            projects = [row[0] for row in cursor.fetchall()]
+            
+            self.logger.debug(f"Retrieved {len(projects)} distinct projects from database")
+            
+            return projects
+            
+        except sqlite3.Error as e:
+            self.logger.error(f"Database error while fetching projects: {e}")
+            raise
+        except Exception as e:
+            self.logger.error(f"Unexpected error while fetching projects: {e}")
+            raise
 
     def update_file_info(self, file_path: str, chunk_count: int) -> None:
         """Update file information after indexing."""

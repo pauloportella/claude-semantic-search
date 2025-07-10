@@ -1,9 +1,11 @@
 """MCP server interface for Claude semantic search."""
 
+from __future__ import annotations
+
 import asyncio
 import sqlite3
 from pathlib import Path
-from typing import Any, List
+from typing import Any, Dict, List, Optional, Union
 
 import psutil
 from mcp import ErrorData, McpError
@@ -14,10 +16,10 @@ from mcp.types import TextContent, Tool
 from src.cli import SemanticSearchCLI
 
 # Create MCP server instance
-server = Server("claude-search")
+server: Server = Server("claude-search")
 
 # We'll initialize search_cli on demand with proper GPU settings
-search_cli = None
+search_cli: Optional[SemanticSearchCLI] = None
 
 
 @server.list_tools()
@@ -137,11 +139,11 @@ def get_search_cli(use_gpu: bool = False) -> SemanticSearchCLI:
 
 
 @server.call_tool()
-async def call_tool(name: str, arguments: Any) -> List[TextContent]:
+async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
     """Execute a tool and return results."""
     if name == "claude_semantic_search":
         # Check if this is a chunk_id lookup
-        chunk_id = arguments.get("chunk_id")
+        chunk_id: Optional[str] = arguments.get("chunk_id")
         if chunk_id:
             # Handle chunk_id lookup (like --chunk-id in CLI)
             cli = get_search_cli()
@@ -164,11 +166,11 @@ async def call_tool(name: str, arguments: Any) -> List[TextContent]:
                 raise McpError(ErrorData(code=-32602, message=f"Chunk not found: {chunk_id}"))
         
         # Regular search
-        query = arguments.get("query", "")
+        query: str = arguments.get("query", "")
             
-        top_k = arguments.get("top_k", 20)
-        use_gpu = arguments.get("use_gpu", False)
-        filters = {}
+        top_k: int = arguments.get("top_k", 20)
+        use_gpu: bool = arguments.get("use_gpu", False)
+        filters: Dict[str, Any] = {}
 
         if arguments.get("project"):
             filters["project_name"] = arguments["project"]
@@ -202,10 +204,10 @@ async def call_tool(name: str, arguments: Any) -> List[TextContent]:
         )
 
         # Handle full_content flag
-        full_content = arguments.get("full_content", False)
+        full_content: bool = arguments.get("full_content", False)
 
         # Format results
-        output = []
+        output: List[str] = []
         for i, result in enumerate(results, 1):
             # Truncate content unless full_content is requested
             content = result['text']
@@ -232,8 +234,8 @@ async def call_tool(name: str, arguments: Any) -> List[TextContent]:
         ]
 
     elif name == "get_chunk_by_id":
-        chunk_id = arguments.get("chunk_id")
-        cli = get_search_cli()
+        chunk_id: Optional[str] = arguments.get("chunk_id")
+        cli: SemanticSearchCLI = get_search_cli()
         chunk = await asyncio.to_thread(cli.storage.get_chunk_by_id, chunk_id)
 
         if chunk:
@@ -254,16 +256,33 @@ async def call_tool(name: str, arguments: Any) -> List[TextContent]:
 
     elif name == "list_projects":
         cli = get_search_cli()
-        stats = await asyncio.to_thread(cli.get_index_stats)
-        projects = stats.get("projects", [])
-
-        return [
-            TextContent(
-                type="text",
-                text=f"**Indexed Projects ({len(projects)})**:\n\n"
-                + "\n".join(f"- {p}" for p in sorted(projects)),
+        
+        try:
+            # Ensure storage is initialized
+            cli.storage.initialize()
+            
+            # Get all projects directly from storage
+            projects = await asyncio.to_thread(cli.storage.get_all_projects)
+            
+            # Format project list
+            if projects:
+                project_list = "\n".join(f"- {p}" for p in projects)
+            else:
+                project_list = "*No projects found in the index*"
+            
+            return [
+                TextContent(
+                    type="text",
+                    text=f"**Indexed Projects ({len(projects)})**:\n\n{project_list}",
+                )
+            ]
+        except Exception as e:
+            raise McpError(
+                ErrorData(
+                    code=-32603,
+                    message=f"Failed to retrieve projects: {str(e)}"
+                )
             )
-        ]
 
     elif name == "get_stats":
         cli = get_search_cli()
@@ -328,7 +347,7 @@ async def call_tool(name: str, arguments: Any) -> List[TextContent]:
         raise McpError(ErrorData(code=-32601, message=f"Unknown tool: {name}"))
 
 
-async def main():
+async def main() -> None:
     """Run the MCP server."""
     async with stdio_server() as (read_stream, write_stream):
         await server.run(
@@ -338,7 +357,7 @@ async def main():
         )
 
 
-def run():
+def run() -> None:
     """Entry point for the MCP server."""
     asyncio.run(main())
 

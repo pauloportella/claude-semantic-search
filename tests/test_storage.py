@@ -438,6 +438,105 @@ class TestHybridStorage:
         assert stats["chunk_types"]["tool_usage"] == 1
         assert stats["embedding_dimension"] == 4
         assert stats["index_type"] == "flat"
+        # Check that projects list is included
+        assert "projects" in stats
+        assert len(stats["projects"]) == 2
+        assert "test_project" in stats["projects"]
+        assert "other_project" in stats["projects"]
+
+    def test_get_all_projects(self):
+        """Test getting all project names."""
+        self.storage.initialize()
+        
+        # Test with empty storage
+        projects = self.storage.get_all_projects()
+        assert projects == []
+        
+        # Add chunks with different projects
+        test_chunks = [
+            Chunk(
+                id="chunk_p1_1",
+                text="Project 1 content",
+                metadata={
+                    "session_id": "session_p1",
+                    "project_name": "Project Alpha",
+                    "timestamp": "2024-01-01T10:00:00Z",
+                },
+                embedding=np.array([0.1, 0.2, 0.3, 0.4], dtype=np.float32),
+            ),
+            Chunk(
+                id="chunk_p1_2",
+                text="More Project 1 content",
+                metadata={
+                    "session_id": "session_p1",
+                    "project_name": "Project Alpha",
+                    "timestamp": "2024-01-01T11:00:00Z",
+                },
+                embedding=np.array([0.2, 0.3, 0.4, 0.5], dtype=np.float32),
+            ),
+            Chunk(
+                id="chunk_p2_1",
+                text="Project 2 content",
+                metadata={
+                    "session_id": "session_p2",
+                    "project_name": "Project Beta",
+                    "timestamp": "2024-01-02T10:00:00Z",
+                },
+                embedding=np.array([0.3, 0.4, 0.5, 0.6], dtype=np.float32),
+            ),
+            Chunk(
+                id="chunk_p3_1",
+                text="Project 3 content",
+                metadata={
+                    "session_id": "session_p3",
+                    "project_name": "Project Gamma",
+                    "timestamp": "2024-01-03T10:00:00Z",
+                },
+                embedding=np.array([0.4, 0.5, 0.6, 0.7], dtype=np.float32),
+            ),
+            Chunk(
+                id="chunk_no_project",
+                text="Content without project",
+                metadata={
+                    "session_id": "session_no_project",
+                    "timestamp": "2024-01-04T10:00:00Z",
+                },
+                embedding=np.array([0.5, 0.6, 0.7, 0.8], dtype=np.float32),
+            ),
+        ]
+        
+        self.storage.add_chunks(test_chunks)
+        
+        # Get all projects
+        projects = self.storage.get_all_projects()
+        
+        # Should return sorted list of unique project names
+        assert len(projects) == 3
+        assert projects == ["Project Alpha", "Project Beta", "Project Gamma"]
+        
+        # Test that empty project names are not included
+        self.storage.add_chunks([
+            Chunk(
+                id="chunk_empty_project",
+                text="Content with empty project",
+                metadata={
+                    "session_id": "session_empty",
+                    "project_name": "",
+                    "timestamp": "2024-01-05T10:00:00Z",
+                },
+                embedding=np.array([0.6, 0.7, 0.8, 0.9], dtype=np.float32),
+            )
+        ])
+        
+        projects_after = self.storage.get_all_projects()
+        assert len(projects_after) == 3  # Empty project name should not be included
+        assert projects_after == ["Project Alpha", "Project Beta", "Project Gamma"]
+
+    def test_get_all_projects_error_handling(self):
+        """Test get_all_projects error handling."""
+        # Test without initialization
+        with pytest.raises(RuntimeError, match="Database not initialized"):
+            self.storage.get_all_projects()
 
     def test_save_and_load_index(self):
         """Test saving and loading FAISS index."""

@@ -5,6 +5,8 @@ Command-line interface for Claude Semantic Search.
 Provides commands for indexing Claude conversations and searching through them.
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import logging
@@ -12,12 +14,12 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import click
 from tqdm import tqdm
 
-from .chunker import ChunkingConfig, ConversationChunker
+from .chunker import Chunk, ChunkingConfig, ConversationChunker
 from .embeddings import EmbeddingConfig, EmbeddingGenerator
 from .parser import JSONLParser
 from .storage import HybridStorage, SearchConfig, StorageConfig
@@ -26,40 +28,40 @@ from .storage import HybridStorage, SearchConfig, StorageConfig
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
 
 class SemanticSearchCLI:
     """Main CLI class for semantic search operations."""
 
-    def __init__(self, data_dir: str = "./data", use_gpu: bool = False):
+    def __init__(self, data_dir: str = "./data", use_gpu: bool = False) -> None:
         """Initialize CLI with data directory and GPU option."""
-        self.data_dir = Path(data_dir)
+        self.data_dir: Path = Path(data_dir)
         self.data_dir.mkdir(exist_ok=True)
-        self.use_gpu = use_gpu
+        self.use_gpu: bool = use_gpu
 
         # Initialize components
-        self.parser = JSONLParser()
-        self.chunker = ConversationChunker(ChunkingConfig())
+        self.parser: JSONLParser = JSONLParser()
+        self.chunker: ConversationChunker = ConversationChunker(ChunkingConfig())
 
         # Initialize embeddings with local model
-        embedding_config = EmbeddingConfig(
+        embedding_config: EmbeddingConfig = EmbeddingConfig(
             model_name="all-mpnet-base-v2",
             batch_size=8,  # Will be auto-adjusted for GPU
             cache_dir=str(self.data_dir / "models"),
             use_gpu=use_gpu,
             auto_batch_size=True,
         )
-        self.embedder = EmbeddingGenerator(embedding_config)
+        self.embedder: EmbeddingGenerator = EmbeddingGenerator(embedding_config)
 
         # Initialize storage
-        storage_config = StorageConfig(
+        storage_config: StorageConfig = StorageConfig(
             data_dir=str(self.data_dir),
             embedding_dim=768,
             auto_save=True,
             use_gpu=use_gpu,
         )
-        self.storage = HybridStorage(storage_config)
+        self.storage: HybridStorage = HybridStorage(storage_config)
 
     def scan_claude_projects(self, base_path: str = "~/.claude/projects") -> List[Path]:
         """Scan for Claude conversation files."""
@@ -274,7 +276,7 @@ class SemanticSearchCLI:
 @click.group()
 @click.option("--data-dir", default="./data", help="Data directory for storage")
 @click.pass_context
-def cli(ctx, data_dir):
+def cli(ctx: click.Context, data_dir: str) -> None:
     """Claude Semantic Search CLI - Index and search your Claude conversations."""
     ctx.ensure_object(dict)
     ctx.obj["data_dir"] = data_dir
@@ -287,7 +289,7 @@ def cli(ctx, data_dir):
 @click.option("--force", is_flag=True, help="Force reindexing of all files")
 @click.option("--gpu", is_flag=True, help="Use GPU acceleration for faster indexing")
 @click.pass_context
-def index(ctx, claude_dir, force, gpu):
+def index(ctx: click.Context, claude_dir: str, force: bool, gpu: bool) -> None:
     """Index Claude conversations for semantic search."""
     cli_instance = SemanticSearchCLI(ctx.obj["data_dir"], use_gpu=gpu)
 
@@ -341,21 +343,21 @@ def index(ctx, claude_dir, force, gpu):
 @click.option("--json", "output_json", is_flag=True, help="Output results as JSON")
 @click.pass_context
 def search(
-    ctx,
-    query,
-    top_k,
-    project,
-    has_code,
-    after,
-    before,
-    session,
-    related_to,
-    same_session,
-    full_content,
-    chunk_id,
-    gpu,
-    output_json,
-):
+    ctx: click.Context,
+    query: str,
+    top_k: int,
+    project: Optional[str],
+    has_code: bool,
+    after: Optional[str],
+    before: Optional[str],
+    session: Optional[str],
+    related_to: Optional[str],
+    same_session: bool,
+    full_content: bool,
+    chunk_id: Optional[str],
+    gpu: bool,
+    output_json: bool,
+) -> None:
     """Search through indexed conversations."""
     cli_instance = SemanticSearchCLI(ctx.obj["data_dir"], use_gpu=gpu)
 
@@ -651,7 +653,7 @@ def search(
 @cli.command()
 @click.option("--gpu", is_flag=True, help="Show GPU information")
 @click.pass_context
-def stats(ctx, gpu):
+def stats(ctx: click.Context, gpu: bool) -> None:
     """Show statistics about the current index."""
     cli_instance = SemanticSearchCLI(ctx.obj["data_dir"], use_gpu=gpu)
 
@@ -707,7 +709,7 @@ def stats(ctx, gpu):
 @click.option("--daemon", is_flag=True, help="Run as background daemon")
 @click.option("--gpu", is_flag=True, help="Use GPU acceleration for indexing")
 @click.pass_context
-def watch(ctx, claude_dir, debounce, daemon, gpu):
+def watch(ctx: click.Context, claude_dir: str, debounce: int, daemon: bool, gpu: bool) -> None:
     """Watch Claude conversations for changes and auto-index them."""
     if daemon:
         from .watcher import start_daemon
@@ -751,7 +753,7 @@ def watch(ctx, claude_dir, debounce, daemon, gpu):
 @click.option("--debounce", default=5, help="Debounce interval in seconds (default: 5)")
 @click.option("--gpu", is_flag=True, help="Use GPU acceleration for indexing")
 @click.pass_context
-def start(ctx, claude_dir, debounce, gpu):
+def start(ctx: click.Context, claude_dir: str, debounce: int, gpu: bool) -> None:
     """Start the file watcher daemon."""
     from .watcher import start_daemon
 
@@ -765,7 +767,7 @@ def start(ctx, claude_dir, debounce, gpu):
 
 @cli.command()
 @click.pass_context
-def stop(ctx):
+def stop(ctx: click.Context) -> None:
     """Stop the file watcher daemon."""
     from .watcher import stop_daemon
 
@@ -774,7 +776,7 @@ def stop(ctx):
 
 @cli.command()
 @click.pass_context
-def status(ctx):
+def status(ctx: click.Context) -> None:
     """Check the status of the file watcher daemon."""
     from .watcher import daemon_status
 

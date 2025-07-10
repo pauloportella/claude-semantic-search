@@ -178,11 +178,12 @@ class TestMCPServer:
         """Test listing all projects."""
         with patch("src.mcp_server.get_search_cli") as mock_get_cli:
             mock_cli = MagicMock()
-            mock_cli.get_index_stats = MagicMock(
-                return_value={
-                    "projects": ["project-a", "project-b", "project-c"],
-                }
+            mock_storage = MagicMock()
+            mock_storage.initialize = MagicMock()
+            mock_storage.get_all_projects = MagicMock(
+                return_value=["project-a", "project-b", "project-c"]
             )
+            mock_cli.storage = mock_storage
             mock_get_cli.return_value = mock_cli
 
             results = await call_tool("list_projects", {})
@@ -193,6 +194,45 @@ class TestMCPServer:
             assert "- project-a" in result_text
             assert "- project-b" in result_text
             assert "- project-c" in result_text
+            
+            # Verify storage was initialized
+            mock_storage.initialize.assert_called_once()
+    
+    @pytest.mark.asyncio
+    async def test_list_projects_empty(self):
+        """Test listing projects when there are none."""
+        with patch("src.mcp_server.get_search_cli") as mock_get_cli:
+            mock_cli = MagicMock()
+            mock_storage = MagicMock()
+            mock_storage.initialize = MagicMock()
+            mock_storage.get_all_projects = MagicMock(return_value=[])
+            mock_cli.storage = mock_storage
+            mock_get_cli.return_value = mock_cli
+
+            results = await call_tool("list_projects", {})
+
+            assert len(results) == 1
+            result_text = results[0].text
+            assert "Indexed Projects (0)" in result_text
+            assert "*No projects found in the index*" in result_text
+    
+    @pytest.mark.asyncio
+    async def test_list_projects_error(self):
+        """Test error handling in list_projects."""
+        with patch("src.mcp_server.get_search_cli") as mock_get_cli:
+            mock_cli = MagicMock()
+            mock_storage = MagicMock()
+            mock_storage.initialize = MagicMock()
+            mock_storage.get_all_projects = MagicMock(
+                side_effect=Exception("Database error")
+            )
+            mock_cli.storage = mock_storage
+            mock_get_cli.return_value = mock_cli
+
+            with pytest.raises(McpError) as exc_info:
+                await call_tool("list_projects", {})
+            
+            assert "Failed to retrieve projects: Database error" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_get_stats(self):
