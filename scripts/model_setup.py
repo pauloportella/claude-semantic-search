@@ -87,7 +87,9 @@ def verify_model(model_path: Path) -> bool:
         # Verify embedding properties
         assert embeddings.shape[0] == len(test_sentences), "Wrong number of embeddings"
         assert embeddings.shape[1] == 768, "Wrong embedding dimension (should be 768)"
-        assert embeddings.dtype == torch.float32, "Wrong embedding dtype"
+        # Note: embeddings are numpy arrays by default, not torch tensors
+        import numpy as np
+        assert embeddings.dtype == np.float32, "Wrong embedding dtype"
         
         print(f"✅ Model verification successful")
         print(f"   - Embedding dimension: {embeddings.shape[1]}")

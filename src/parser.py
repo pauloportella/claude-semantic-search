@@ -7,7 +7,7 @@ structured conversation objects with metadata.
 
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Generator
 from dataclasses import dataclass, field
@@ -90,7 +90,14 @@ class JSONLParser:
             uuid = data.get('uuid', '')
             content = self._extract_content(data)
             timestamp = self._extract_timestamp(data)
-            role = data.get('role', 'unknown')
+            
+            # Extract role from message field if available, otherwise use top-level
+            role = 'unknown'
+            if 'message' in data and isinstance(data['message'], dict):
+                role = data['message'].get('role', 'unknown')
+            else:
+                role = data.get('role', 'unknown')
+            
             parent_uuid = data.get('parentUuid')
             
             # Extract tool information
@@ -118,8 +125,14 @@ class JSONLParser:
     
     def _extract_content(self, data: Dict[str, Any]) -> str:
         """Extract text content from message data."""
+        # Handle Claude Code JSONL format first
+        if 'message' in data and isinstance(data['message'], dict):
+            message = data['message']
+            if 'content' in message:
+                return self._extract_from_content_blocks(message['content'])
+        
         # Try different possible content fields
-        content_fields = ['content', 'text', 'message', 'body']
+        content_fields = ['content', 'text', 'body']
         
         for field in content_fields:
             if field in data:
@@ -167,25 +180,31 @@ class JSONLParser:
                 if isinstance(timestamp, str):
                     try:
                         # Try ISO format first
-                        return datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                        dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                        # Ensure it's UTC if no timezone info
+                        if dt.tzinfo is None:
+                            dt = dt.replace(tzinfo=timezone.utc)
+                        return dt
                     except ValueError:
                         try:
                             # Try parsing as milliseconds
-                            return datetime.fromtimestamp(int(timestamp) / 1000)
+                            dt = datetime.fromtimestamp(int(timestamp) / 1000, tz=timezone.utc)
+                            return dt
                         except (ValueError, TypeError):
                             continue
                 elif isinstance(timestamp, (int, float)):
                     try:
                         # Assume milliseconds if > 1e10, otherwise seconds
                         if timestamp > 1e10:
-                            return datetime.fromtimestamp(timestamp / 1000)
+                            dt = datetime.fromtimestamp(timestamp / 1000, tz=timezone.utc)
                         else:
-                            return datetime.fromtimestamp(timestamp)
+                            dt = datetime.fromtimestamp(timestamp, tz=timezone.utc)
+                        return dt
                     except (ValueError, TypeError):
                         continue
         
         # Default to current time if no timestamp found
-        return datetime.now()
+        return datetime.now(timezone.utc)
     
     def _extract_tool_calls(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Extract tool calls from message data."""
@@ -237,8 +256,8 @@ class JSONLParser:
         
         # Extract metadata
         project_name = self._extract_project_name(file_path)
-        created_at = messages[0].timestamp if messages else datetime.now()
-        updated_at = messages[-1].timestamp if messages else datetime.now()
+        created_at = messages[0].timestamp if messages else datetime.now(timezone.utc)
+        updated_at = messages[-1].timestamp if messages else datetime.now(timezone.utc)
         
         # Calculate statistics
         total_messages = len(messages)

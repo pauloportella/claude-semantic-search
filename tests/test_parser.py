@@ -4,7 +4,7 @@ Tests for the JSONL parser module.
 
 import json
 import pytest
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch, mock_open
 
@@ -126,8 +126,8 @@ class TestJSONLParser:
         
         timestamp = self.parser._extract_timestamp(data)
         assert isinstance(timestamp, datetime)
-        # Should be close to current time
-        assert abs((datetime.now() - timestamp).total_seconds()) < 2
+        # Should be close to current time (both should be timezone-aware)
+        assert abs((datetime.now(timezone.utc) - timestamp).total_seconds()) < 2
     
     def test_has_code_blocks(self):
         """Test code block detection."""
@@ -277,3 +277,211 @@ class TestJSONLParser:
         assert conversation.has_tool_usage is False
         assert conversation.has_code_blocks is False
         assert len(conversation.messages) == 0
+    
+    def test_extract_timestamp_mixed_timezones(self):
+        """Test handling mixed timezone formats (the issue we fixed)."""
+        # Test offset-aware ISO format
+        data1 = {"timestamp": "2024-01-15T10:00:00+00:00"}
+        timestamp1 = self.parser._extract_timestamp(data1)
+        assert timestamp1.tzinfo is not None
+        assert timestamp1.tzinfo == timezone.utc
+        
+        # Test offset-naive ISO format (should be converted to UTC)
+        data2 = {"timestamp": "2024-01-15T10:00:00"}
+        timestamp2 = self.parser._extract_timestamp(data2)
+        assert timestamp2.tzinfo is not None
+        assert timestamp2.tzinfo == timezone.utc
+        
+        # Test Z suffix format
+        data3 = {"timestamp": "2024-01-15T10:00:00Z"}
+        timestamp3 = self.parser._extract_timestamp(data3)
+        assert timestamp3.tzinfo is not None
+        assert timestamp3.tzinfo == timezone.utc
+        
+        # All should be comparable without error
+        assert timestamp1 == timestamp2  # Same time, both UTC
+        assert timestamp1 == timestamp3  # Same time, both UTC
+    
+    def test_extract_timestamp_various_formats(self):
+        """Test various timestamp formats found in Claude conversations."""
+        # Test different field names
+        for field in ["timestamp", "created_at", "createdAt", "time"]:
+            data = {field: "2024-01-15T10:00:00Z"}
+            timestamp = self.parser._extract_timestamp(data)
+            assert timestamp.tzinfo == timezone.utc
+            assert timestamp.year == 2024
+        
+        # Test milliseconds as integer
+        data = {"timestamp": 1705312800000}
+        timestamp = self.parser._extract_timestamp(data)
+        assert timestamp.tzinfo == timezone.utc
+        
+        # Test seconds as integer
+        data = {"timestamp": 1705312800}
+        timestamp = self.parser._extract_timestamp(data)
+        assert timestamp.tzinfo == timezone.utc
+        
+        # Test with timezone offset
+        data = {"timestamp": "2024-01-15T10:00:00-05:00"}
+        timestamp = self.parser._extract_timestamp(data)
+        assert timestamp.tzinfo is not None
+        # The timestamp preserves its original timezone
+        assert timestamp.hour == 10  # Original hour is preserved
+        # But it should be comparable with UTC times
+        utc_time = datetime(2024, 1, 15, 15, 0, 0, tzinfo=timezone.utc)
+        assert timestamp == utc_time  # Same moment in time
+    
+    def test_build_conversation_with_mixed_timezones(self):
+        """Test building conversation with messages having different timezone formats."""
+        messages = [
+            Message(
+                uuid="msg-1",
+                content="First message",
+                timestamp=datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc),
+                role="user"
+            ),
+            Message(
+                uuid="msg-2",
+                content="Second message",
+                timestamp=datetime(2024, 1, 15, 10, 1, 0, tzinfo=timezone.utc),
+                role="assistant"
+            ),
+            Message(
+                uuid="msg-3",
+                content="Third message",
+                timestamp=datetime(2024, 1, 15, 10, 2, 0, tzinfo=timezone.utc),
+                role="user"
+            )
+        ]
+        
+        # This should not raise any timezone comparison errors
+        conversation = self.parser._build_conversation(
+            messages, 
+            "test-session", 
+            "/test/path.jsonl"
+        )
+        
+        assert conversation is not None
+        assert len(conversation.messages) == 3
+        # Messages should be sorted by timestamp
+        assert conversation.messages[0].uuid == "msg-1"
+        assert conversation.messages[1].uuid == "msg-2"
+        assert conversation.messages[2].uuid == "msg-3"
+    
+    def test_parse_real_world_timestamps(self):
+        """Test parsing real-world timestamp formats from Claude conversations."""
+        # Test data mimicking actual Claude conversation format
+        test_cases = [
+            # Format from the error message
+            {"createdAt": "2024-07-01T21:34:26.262000+00:00"},
+            {"createdAt": "2024-07-01T21:34:26.262Z"},
+            {"createdAt": "2024-07-01T21:34:26"},
+            {"timestamp": "2025-01-01T00:00:00Z"},
+            {"timestamp": "2025-01-01T00:00:00+00:00"},
+            {"created_at": 1705312800000},  # milliseconds
+            {"time": 1705312800},  # seconds
+        ]
+        
+        for data in test_cases:
+            timestamp = self.parser._extract_timestamp(data)
+            assert timestamp.tzinfo is not None, f"Failed for data: {data}"
+            # All timestamps should be timezone-aware
+            # This ensures they can be compared without errors
+    
+    def test_parse_file_with_mixed_timestamp_formats(self):
+        """Test parsing a file with messages containing different timestamp formats."""
+        jsonl_content = '\n'.join([
+            json.dumps({
+                "uuid": "msg-1",
+                "role": "user",
+                "content": "First message",
+                "timestamp": "2024-01-15T10:00:00Z",
+                "sessionId": "test-session"
+            }),
+            json.dumps({
+                "uuid": "msg-2",
+                "role": "assistant",
+                "content": "Second message",
+                "createdAt": "2024-01-15T10:01:00+00:00",
+                "sessionId": "test-session"
+            }),
+            json.dumps({
+                "uuid": "msg-3",
+                "role": "user",
+                "content": "Third message",
+                "timestamp": 1705312920000,  # milliseconds
+                "sessionId": "test-session"
+            })
+        ])
+        
+        with patch("builtins.open", mock_open(read_data=jsonl_content)):
+            with patch("pathlib.Path.exists", return_value=True):
+                conversation = self.parser.parse_file("/fake/path.jsonl")
+                
+                assert conversation is not None
+                assert len(conversation.messages) == 3
+                # All messages should have been parsed successfully
+                # and sorting by timestamp should work without errors
+    
+    def test_extract_content_edge_cases(self):
+        """Test content extraction edge cases."""
+        # Test with nested list content
+        data = {"content": [{"text": "Part 1"}, "Part 2"]}
+        content = self.parser._extract_content(data)
+        assert "Part 1" in content
+        assert "Part 2" in content
+        
+        # Test with nested dict content
+        data = {"content": {"message": "Nested message"}}
+        content = self.parser._extract_content(data)
+        assert content == "Nested message"
+        
+        # Test fallback to str() for unknown content structure
+        data = {"content": {"unknown": "structure"}}
+        content = self.parser._extract_content(data)
+        assert "unknown" in content
+        
+        # Test empty content extraction
+        data = {"no_content": "here"}
+        content = self.parser._extract_content(data)
+        assert content == ""
+    
+    def test_timestamp_parsing_errors(self):
+        """Test timestamp parsing error handling."""
+        # Test invalid timestamp string
+        data = {"timestamp": "invalid-timestamp-format"}
+        timestamp = self.parser._extract_timestamp(data)
+        # Should fallback to current time
+        assert isinstance(timestamp, datetime)
+        assert timestamp.tzinfo == timezone.utc
+        
+        # Test invalid millisecond value
+        data = {"timestamp": "not-a-number"}
+        timestamp = self.parser._extract_timestamp(data)
+        assert isinstance(timestamp, datetime)
+        assert timestamp.tzinfo == timezone.utc
+    
+    def test_parse_message_error_handling(self):
+        """Test message parsing error handling."""
+        # Test with data that causes an exception (non-dict type)
+        data = "this_will_cause_error"
+        message = self.parser._parse_message(data)
+        # Should return None on error
+        assert message is None
+    
+    def test_scan_directory_error_handling(self):
+        """Test directory scanning error handling."""
+        # Create a mock directory with a file that causes parsing error
+        with patch("pathlib.Path.exists") as mock_exists:
+            mock_exists.return_value = True
+            
+            with patch("pathlib.Path.rglob") as mock_rglob:
+                mock_rglob.return_value = [Path("/fake/error.jsonl")]
+                
+                with patch.object(self.parser, "parse_file") as mock_parse:
+                    # First call succeeds, second raises exception
+                    mock_parse.side_effect = [None, Exception("Parse error")]
+                    
+                    conversations = list(self.parser.scan_directory("/fake/dir"))
+                    # Should handle the error gracefully
+                    assert len(conversations) == 0

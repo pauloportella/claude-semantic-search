@@ -63,10 +63,78 @@ class ConversationChunker:
         
         return self._deduplicate_chunks(chunks)
     
+    def _filter_messages(self, messages: List[Message]) -> List[Message]:
+        """Filter out unwanted messages from conversation."""
+        filtered = []
+        
+        for message in messages:
+            # Skip messages with unknown role (system messages)
+            if message.role == 'unknown':
+                continue
+            
+            # Skip Claude Code hook-related messages
+            if self._is_hook_message(message):
+                continue
+            
+            # Skip system tool messages
+            if self._is_system_tool_message(message):
+                continue
+            
+            filtered.append(message)
+        
+        return filtered
+    
+    def _is_hook_message(self, message: Message) -> bool:
+        """Check if message is related to Claude Code hooks."""
+        content = message.content.lower()
+        
+        # Official Claude Code hook events
+        hook_events = [
+            'pretooluse',
+            'posttooluse', 
+            'notification',
+            'stop',
+            'subagentstop'
+        ]
+        
+        # Hook-related file paths and patterns
+        hook_patterns = [
+            '.claude/hooks/',
+            'hook:',
+            'hooks.json',
+            'claude code hook'
+        ]
+        
+        # Tool matchers that hooks commonly use
+        tool_matchers = [
+            'task', 'bash', 'glob', 'grep', 'read', 'edit', 
+            'write', 'webfetch', 'websearch'
+        ]
+        
+        # Check for any hook indicators
+        all_indicators = hook_events + hook_patterns
+        
+        return any(indicator in content for indicator in all_indicators)
+    
+    def _is_system_tool_message(self, message: Message) -> bool:
+        """Check if message is a system tool operation message."""
+        content = message.content.lower()
+        
+        # Check for system tool patterns
+        system_patterns = [
+            'pretooluse:',
+            'posttooluse:',
+            'completed successfully:',
+            'tool use:',
+            'system:'
+        ]
+        
+        return any(pattern in content for pattern in system_patterns)
+    
     def _create_qa_chunks(self, conversation: Conversation) -> List[Chunk]:
         """Create chunks from question-answer pairs."""
         chunks = []
-        messages = conversation.messages
+        messages = self._filter_messages(conversation.messages)
         
         for i in range(len(messages) - 1):
             if messages[i].role == 'user' and messages[i + 1].role == 'assistant':
@@ -101,7 +169,7 @@ class ConversationChunker:
     def _create_context_chunks(self, conversation: Conversation) -> List[Chunk]:
         """Create chunks with extended context for complex discussions."""
         chunks = []
-        messages = conversation.messages
+        messages = self._filter_messages(conversation.messages)
         
         # Find conversation segments that benefit from extended context
         segments = self._identify_context_segments(messages)
@@ -127,7 +195,7 @@ class ConversationChunker:
         """Create chunks focused on code blocks and technical content."""
         chunks = []
         
-        for message in conversation.messages:
+        for message in self._filter_messages(conversation.messages):
             if message.has_code:
                 code_blocks = self._extract_code_blocks(message.content)
                 
@@ -154,7 +222,7 @@ class ConversationChunker:
         """Create chunks focused on tool usage and results."""
         chunks = []
         
-        for message in conversation.messages:
+        for message in self._filter_messages(conversation.messages):
             if message.tool_calls or message.tool_results:
                 chunk_text = self._format_tool_chunk(message)
                 
