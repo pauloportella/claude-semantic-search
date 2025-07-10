@@ -82,7 +82,7 @@ class SemanticSearchCLI:
         return jsonl_files
     
     def index_conversations(self, files: List[Path], force: bool = False) -> Dict[str, Any]:
-        """Index conversation files."""
+        """Index conversation files with retry support."""
         click.echo("🚀 Starting conversation indexing...")
         
         # Initialize storage
@@ -102,6 +102,8 @@ class SemanticSearchCLI:
             "errors": [],
             "start_time": time.time()
         }
+        
+        failed_files = []
         
         # Process files with progress bar
         with tqdm(files, desc="Processing files", unit="file") as pbar:
@@ -135,7 +137,52 @@ class SemanticSearchCLI:
                     error_msg = f"Error processing {file_path}: {str(e)}"
                     stats["errors"].append(error_msg)
                     logger.error(error_msg)
+                    failed_files.append(file_path)
                     continue
+        
+        # Retry failed files once
+        if failed_files:
+            click.echo(f"\n🔄 Retrying {len(failed_files)} failed files...")
+            retry_success = 0
+            
+            with tqdm(failed_files, desc="Retrying failed files", unit="file") as pbar:
+                for file_path in pbar:
+                    try:
+                        pbar.set_postfix_str(f"Retrying {file_path.name}")
+                        
+                        # Parse conversation
+                        conversation = self.parser.parse_file(str(file_path))
+                        if not conversation:
+                            continue
+                        
+                        # Create chunks
+                        chunks = self.chunker.chunk_conversation(conversation)
+                        
+                        if not chunks:
+                            continue
+                        
+                        # Generate embeddings
+                        embeddings = self.embedder.generate_embeddings(chunks)
+                        
+                        # Store in hybrid storage
+                        self.storage.add_chunks(chunks)
+                        
+                        # Update stats
+                        stats["chunks_created"] += len(chunks)
+                        stats["chunks_indexed"] += len(chunks)
+                        stats["files_processed"] += 1
+                        retry_success += 1
+                        
+                        # Remove from errors list
+                        stats["errors"] = [err for err in stats["errors"] if file_path.name not in err]
+                        
+                    except Exception as e:
+                        # Failed again, keep in errors
+                        logger.error(f"Retry failed for {file_path}: {str(e)}")
+                        continue
+            
+            if retry_success > 0:
+                click.echo(f"✅ Successfully retried {retry_success} files")
         
         stats["end_time"] = time.time()
         stats["duration"] = stats["end_time"] - stats["start_time"]

@@ -162,7 +162,8 @@ class ConversationChunker:
                         conversation=conversation,
                         messages=[user_msg, assistant_msg]
                     )
-                    chunks.append(chunk)
+                    if chunk:
+                        chunks.append(chunk)
         
         return chunks
     
@@ -187,7 +188,8 @@ class ConversationChunker:
                     conversation=conversation,
                     messages=segment_messages
                 )
-                chunks.append(chunk)
+                if chunk:
+                    chunks.append(chunk)
         
         return chunks
     
@@ -214,7 +216,8 @@ class ConversationChunker:
                                 "code_lines": len(code_block['code'].split('\n'))
                             }
                         )
-                        chunks.append(chunk)
+                        if chunk:
+                            chunks.append(chunk)
         
         return chunks
     
@@ -237,7 +240,8 @@ class ConversationChunker:
                             "has_results": bool(message.tool_results)
                         }
                     )
-                    chunks.append(chunk)
+                    if chunk:
+                        chunks.append(chunk)
         
         return chunks
     
@@ -424,7 +428,8 @@ class ConversationChunker:
                             conversation=None,
                             messages=[user_msg, assistant_msg]
                         )
-                        chunks.append(chunk)
+                        if chunk:
+                            chunks.append(chunk)
                     current_chunk = word + " "
             
             # Add final chunk
@@ -435,7 +440,8 @@ class ConversationChunker:
                     conversation=None,
                     messages=[user_msg, assistant_msg]
                 )
-                chunks.append(chunk)
+                if chunk:
+                    chunks.append(chunk)
         else:
             # Split by paragraphs
             current_chunk = ""
@@ -451,7 +457,8 @@ class ConversationChunker:
                             conversation=None,
                             messages=[user_msg, assistant_msg]
                         )
-                        chunks.append(chunk)
+                        if chunk:
+                            chunks.append(chunk)
                     current_chunk = paragraph + "\n\n"
             
             # Add final chunk
@@ -462,13 +469,24 @@ class ConversationChunker:
                     conversation=None,
                     messages=[user_msg, assistant_msg]
                 )
-                chunks.append(chunk)
+                if chunk:
+                    chunks.append(chunk)
         
         return chunks
     
     def _create_chunk(self, text: str, chunk_type: str, conversation: Optional[Conversation],
                      messages: List[Message], extra_metadata: Optional[Dict[str, Any]] = None) -> Chunk:
         """Create a chunk with metadata."""
+        # Validate text
+        if text is None:
+            text = ""
+        elif not isinstance(text, str):
+            text = str(text)
+        
+        # Skip chunks with invalid text
+        if not text or not text.strip():
+            return None
+            
         self.chunk_counter += 1
         chunk_id = f"chunk_{self.chunk_counter:06d}"
         

@@ -172,9 +172,24 @@ class EmbeddingGenerator:
         """Generate embeddings for a batch of texts."""
         start_time = time.time()
         
+        # Validate and sanitize texts
+        validated_texts = []
+        for i, text in enumerate(texts):
+            if text is None:
+                self.logger.warning(f"Skipping chunk {i}: text is None")
+                validated_texts.append("")  # Use empty string as fallback
+            elif not isinstance(text, str):
+                self.logger.warning(f"Skipping chunk {i}: text is not string (type: {type(text)})")
+                validated_texts.append(str(text) if text else "")  # Convert to string
+            elif not text.strip():
+                self.logger.warning(f"Skipping chunk {i}: text is empty or whitespace only")
+                validated_texts.append("empty")  # Use placeholder for empty text
+            else:
+                validated_texts.append(text)
+        
         # Generate embeddings with progress bar
         embeddings = self.model.encode(
-            texts,
+            validated_texts,
             batch_size=self.config.batch_size,
             normalize_embeddings=self.config.normalize_embeddings,
             show_progress_bar=self.config.show_progress,
