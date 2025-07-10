@@ -493,6 +493,161 @@ class TestCLICommands:
         assert 'lte' in filters['timestamp']
         assert 'gte' not in filters['timestamp']
         assert filters['timestamp']['lte'] == '2025-12-31T23:59:59+00:00'
+    
+    @patch('src.cli.SemanticSearchCLI.search_conversations')
+    def test_search_command_full_content(self, mock_search_conversations):
+        """Test search command with full content display."""
+        long_text = "This is a very long piece of text that would normally be truncated at 200 characters but should be displayed in full when the --full-content flag is used. " * 3
+        
+        mock_search_conversations.return_value = [
+            {
+                "chunk_id": "test_chunk",
+                "similarity": 0.95,
+                "text": long_text,
+                "project": "test_project", 
+                "session": "test_session",
+                "timestamp": "2025-06-15T12:00:00Z",
+                "has_code": False,
+            }
+        ]
+        
+        result = self.runner.invoke(cli, [
+            '--data-dir', self.temp_dir,
+            'search', 'test query',
+            '--full-content'
+        ])
+        
+        assert result.exit_code == 0
+        assert "Found 1 results" in result.output
+        # Verify full text is shown (not truncated with "...")
+        assert long_text in result.output
+        assert "..." not in result.output.split(long_text)[1].split("\n")[0]  # No ... after the text
+    
+    @patch('src.cli.SemanticSearchCLI.search_conversations')
+    def test_search_command_truncated_content(self, mock_search_conversations):
+        """Test search command with default truncated content."""
+        long_text = "This is a very long piece of text that should be truncated at 200 characters when the --full-content flag is not used. " * 3
+        
+        mock_search_conversations.return_value = [
+            {
+                "chunk_id": "test_chunk",
+                "similarity": 0.95,
+                "text": long_text,
+                "project": "test_project",
+                "session": "test_session", 
+                "timestamp": "2025-06-15T12:00:00Z",
+                "has_code": False,
+            }
+        ]
+        
+        result = self.runner.invoke(cli, [
+            '--data-dir', self.temp_dir,
+            'search', 'test query'
+        ])
+        
+        assert result.exit_code == 0
+        assert "Found 1 results" in result.output
+        # Verify text is truncated with "..."
+        assert "..." in result.output
+        assert long_text not in result.output  # Full text should not be present
+    
+    @patch('src.cli.SemanticSearchCLI')
+    def test_search_command_chunk_id_success(self, mock_cli_class):
+        """Test search command with direct chunk ID retrieval."""
+        mock_instance = Mock()
+        mock_cli_class.return_value = mock_instance
+        
+        # Mock the chunk object
+        mock_chunk = Mock()
+        mock_chunk.text = "This is the full chunk content"
+        
+        # Mock storage methods
+        mock_instance.storage.initialize.return_value = None
+        mock_instance.storage.get_chunk_by_id.return_value = mock_chunk
+        mock_instance.storage._get_chunk_data.return_value = {
+            "project_name": "test_project",
+            "session_id": "test_session",
+            "timestamp": "2025-06-15T12:00:00Z",
+            "has_code": True
+        }
+        
+        result = self.runner.invoke(cli, [
+            '--data-dir', self.temp_dir,
+            'search', '',
+            '--chunk-id', 'test_chunk_123'
+        ])
+        
+        assert result.exit_code == 0
+        assert "📄 Chunk: test_chunk_123" in result.output
+        assert "Project: test_project" in result.output
+        assert "Session: test_session" in result.output
+        assert "🔧 Contains code" in result.output
+        assert "This is the full chunk content" in result.output
+        
+        # Verify storage methods were called
+        mock_instance.storage.initialize.assert_called_once()
+        mock_instance.storage.get_chunk_by_id.assert_called_once_with('test_chunk_123')
+        mock_instance.storage._get_chunk_data.assert_called_once_with('test_chunk_123')
+    
+    @patch('src.cli.SemanticSearchCLI')
+    def test_search_command_chunk_id_not_found(self, mock_cli_class):
+        """Test search command with non-existent chunk ID."""
+        mock_instance = Mock()
+        mock_cli_class.return_value = mock_instance
+        
+        # Mock storage methods to return None (chunk not found)
+        mock_instance.storage.initialize.return_value = None
+        mock_instance.storage.get_chunk_by_id.return_value = None
+        
+        result = self.runner.invoke(cli, [
+            '--data-dir', self.temp_dir,
+            'search', '',
+            '--chunk-id', 'nonexistent_chunk'
+        ])
+        
+        assert result.exit_code == 1
+        assert "❌ Chunk not found: nonexistent_chunk" in result.output
+    
+    @patch('src.cli.SemanticSearchCLI')
+    def test_search_command_chunk_id_json_output(self, mock_cli_class):
+        """Test search command with chunk ID and JSON output."""
+        mock_instance = Mock()
+        mock_cli_class.return_value = mock_instance
+        
+        # Mock the chunk object
+        mock_chunk = Mock()
+        mock_chunk.text = "JSON chunk content"
+        
+        # Mock storage methods
+        mock_instance.storage.initialize.return_value = None
+        mock_instance.storage.get_chunk_by_id.return_value = mock_chunk
+        mock_instance.storage._get_chunk_data.return_value = {
+            "project_name": "json_project",
+            "session_id": "json_session",
+            "timestamp": "2025-06-15T12:00:00Z"
+        }
+        
+        result = self.runner.invoke(cli, [
+            '--data-dir', self.temp_dir,
+            'search', '',
+            '--chunk-id', 'json_chunk_123',
+            '--json'
+        ])
+        
+        assert result.exit_code == 0
+        
+        # Parse JSON output
+        import json
+        output_data = json.loads(result.output.strip())
+        
+        assert 'items' in output_data
+        assert len(output_data['items']) == 1
+        
+        item = output_data['items'][0]
+        assert item['uid'] == 'json_chunk_123'
+        assert item['text'] == 'JSON chunk content'
+        assert item['variables']['project'] == 'json_project'
+        assert item['variables']['session'] == 'json_session'
 
 
 class TestCLIIntegration:

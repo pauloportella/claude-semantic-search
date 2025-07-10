@@ -227,11 +227,57 @@ def index(ctx, claude_dir, force):
 @click.option('--has-code', is_flag=True, help='Filter for chunks with code')
 @click.option('--after', help='Filter for chunks after date (YYYY-MM-DD)')
 @click.option('--before', help='Filter for chunks before date (YYYY-MM-DD)')
+@click.option('--full-content', is_flag=True, help='Show full content instead of truncated')
+@click.option('--chunk-id', help='Get specific chunk by ID (ignores query and other filters)')
 @click.option('--json', 'output_json', is_flag=True, help='Output results as JSON')
 @click.pass_context
-def search(ctx, query, top_k, project, has_code, after, before, output_json):
+def search(ctx, query, top_k, project, has_code, after, before, full_content, chunk_id, output_json):
     """Search through indexed conversations."""
     cli_instance = SemanticSearchCLI(ctx.obj['data_dir'])
+    
+    # Handle direct chunk retrieval
+    if chunk_id:
+        try:
+            cli_instance.storage.initialize()
+            chunk = cli_instance.storage.get_chunk_by_id(chunk_id)
+            
+            if not chunk:
+                click.echo(f"❌ Chunk not found: {chunk_id}")
+                sys.exit(1)
+            
+            # Get metadata from database for display
+            chunk_data = cli_instance.storage._get_chunk_data(chunk_id)
+            
+            if output_json:
+                click.echo(json.dumps({
+                    "items": [{
+                        "uid": chunk_id,
+                        "title": chunk.text[:100] + "..." if len(chunk.text) > 100 else chunk.text,
+                        "subtitle": f"Direct chunk retrieval",
+                        "arg": chunk_id,
+                        "text": chunk.text,
+                        "quicklookurl": "",
+                        "variables": {
+                            "project": chunk_data.get("project_name", "unknown") if chunk_data else "unknown",
+                            "session": chunk_data.get("session_id", "unknown") if chunk_data else "unknown",
+                            "timestamp": chunk_data.get("timestamp", "unknown") if chunk_data else "unknown"
+                        }
+                    }]
+                }, indent=2))
+            else:
+                click.echo(f"📄 Chunk: {chunk_id}")
+                click.echo(f"   Project: {chunk_data.get('project_name', 'unknown') if chunk_data else 'unknown'}")
+                click.echo(f"   Session: {chunk_data.get('session_id', 'unknown') if chunk_data else 'unknown'}")  
+                click.echo(f"   Time: {chunk_data.get('timestamp', 'unknown') if chunk_data else 'unknown'}")
+                if chunk_data and chunk_data.get('has_code'):
+                    click.echo("   🔧 Contains code")
+                click.echo()
+                click.echo(chunk.text)
+            
+            return
+        except Exception as e:
+            click.echo(f"❌ Failed to retrieve chunk: {str(e)}")
+            sys.exit(1)
     
     # Build filters
     filters = {}
@@ -291,7 +337,13 @@ def search(ctx, query, top_k, project, has_code, after, before, output_json):
             
             for i, result in enumerate(results, 1):
                 click.echo(f"{i}. [Similarity: {result['similarity']:.3f}] {result['project']}")
-                click.echo(f"   {result['text'][:200]}...")
+                
+                # Show full content or truncated based on flag
+                if full_content:
+                    click.echo(f"   {result['text']}")
+                else:
+                    click.echo(f"   {result['text'][:200]}...")
+                
                 click.echo(f"   Session: {result['session']} | Time: {result['timestamp']}")
                 if result['has_code']:
                     click.echo("   🔧 Contains code")
