@@ -115,11 +115,12 @@ class ConversationFileHandler(FileSystemEventHandler):
 class ConversationWatcher:
     """File watcher for Claude conversations."""
     
-    def __init__(self, data_dir: str = "./data", debounce_seconds: int = 5):
+    def __init__(self, data_dir: str = "./data", debounce_seconds: int = 5, use_gpu: bool = False):
         """Initialize watcher."""
         self.data_dir = data_dir
         self.debounce_seconds = debounce_seconds
-        self.cli_instance = SemanticSearchCLI(data_dir)
+        self.use_gpu = use_gpu
+        self.cli_instance = SemanticSearchCLI(data_dir, use_gpu)
         self.observer = Observer()
         self.handler = ConversationFileHandler(self.cli_instance, debounce_seconds)
         self.is_running = False
@@ -302,9 +303,9 @@ class ConversationWatcher:
 
 
 def run_watcher(data_dir: str = "./data", claude_dir: str = "~/.claude/projects", 
-                debounce_seconds: int = 5):
+                debounce_seconds: int = 5, use_gpu: bool = False):
     """Run the file watcher in interactive mode."""
-    watcher = ConversationWatcher(data_dir, debounce_seconds)
+    watcher = ConversationWatcher(data_dir, debounce_seconds, use_gpu)
     
     try:
         watcher.start_watching(claude_dir)
@@ -314,9 +315,9 @@ def run_watcher(data_dir: str = "./data", claude_dir: str = "~/.claude/projects"
 
 
 def start_daemon(data_dir: str = "./data", claude_dir: str = "~/.claude/projects", 
-                 debounce_seconds: int = 5):
+                 debounce_seconds: int = 5, use_gpu: bool = False):
     """Start the file watcher as a daemon."""
-    watcher = ConversationWatcher(data_dir, debounce_seconds)
+    watcher = ConversationWatcher(data_dir, debounce_seconds, use_gpu)
     
     # Fork process to run in background
     try:

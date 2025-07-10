@@ -18,6 +18,7 @@ from tqdm import tqdm
 import torch
 
 from .chunker import Chunk
+from .gpu_utils import assess_gpu_capability, calculate_optimal_batch_size, log_gpu_status
 
 
 @dataclass
@@ -27,6 +28,8 @@ class EmbeddingConfig:
     batch_size: int = 16
     max_seq_length: int = 384
     device: str = "auto"  # "auto", "cpu", "cuda", "mps"
+    use_gpu: bool = False
+    auto_batch_size: bool = True  # Auto-adjust batch size for GPU
     normalize_embeddings: bool = True
     show_progress: bool = True
     cache_dir: Optional[str] = None
@@ -51,6 +54,15 @@ class EmbeddingGenerator:
         self.model: Optional[SentenceTransformer] = None
         self.logger = logging.getLogger(__name__)
         self._embedding_dim: Optional[int] = None
+        self._gpu_capability = None
+        
+        # If GPU is requested, assess capability
+        if self.config.use_gpu:
+            self._gpu_capability = assess_gpu_capability()
+            if not self._gpu_capability.can_use_gpu:
+                self.logger.warning(f"GPU requested but not available: {self._gpu_capability.status_message}")
+                self.logger.info("Falling back to CPU processing")
+                self.config.use_gpu = False
         
     def load_model(self) -> None:
         """Load the sentence transformer model."""
@@ -68,21 +80,57 @@ class EmbeddingGenerator:
                 cache_folder=cache_dir
             )
             
-            # Set device after loading
-            if self.config.device != "auto":
-                self.model.to(self.config.device)
+            # Determine target device
+            target_device = self._determine_target_device()
+            
+            # Set device
+            self.model.to(target_device)
             
             # Configure model parameters
             self.model.max_seq_length = self.config.max_seq_length
             
+            # Auto-adjust batch size for GPU if enabled
+            if self.config.use_gpu and self.config.auto_batch_size and self._gpu_capability:
+                if self._gpu_capability.gpu_memory_free:
+                    memory_gb = self._gpu_capability.gpu_memory_free / (1024**3)
+                    optimal_batch = calculate_optimal_batch_size(memory_gb)
+                    self.config.batch_size = optimal_batch
+                    self.logger.info(f"Auto-adjusted batch size for GPU: {optimal_batch}")
+            
             # Get embedding dimension
             self._embedding_dim = self.model.get_sentence_embedding_dimension()
             
-            self.logger.info(f"Model loaded successfully. Embedding dimension: {self._embedding_dim}")
+            device_info = str(self.model.device) if hasattr(self.model, 'device') else target_device
+            self.logger.info(f"Model loaded successfully on {device_info}. Embedding dimension: {self._embedding_dim}")
+            
+            # Log GPU status if requested
+            if self.config.use_gpu and self._gpu_capability:
+                log_gpu_status(self._gpu_capability, self.logger)
             
         except Exception as e:
             self.logger.error(f"Failed to load model {self.config.model_name}: {e}")
             raise
+    
+    def _determine_target_device(self) -> str:
+        """Determine the target device for the model."""
+        if self.config.use_gpu and self._gpu_capability and self._gpu_capability.can_use_gpu:
+            # Check what backend is available
+            if torch.cuda.is_available():
+                return "cuda"
+            elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+                return "mps"
+            else:
+                return "cpu"
+        elif self.config.device != "auto":
+            return self.config.device
+        else:
+            # Auto-detect best device
+            if torch.cuda.is_available():
+                return "cuda"
+            elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+                return "mps"
+            else:
+                return "cpu"
     
     def generate_embeddings(self, chunks: List[Chunk]) -> List[np.ndarray]:
         """Generate embeddings for a list of chunks."""
@@ -350,10 +398,33 @@ class EmbeddingGenerator:
         if not self.model:
             return {}
         
-        return {
+        info = {
             "model_name": self.config.model_name,
             "embedding_dimension": self._embedding_dim,
             "max_seq_length": self.config.max_seq_length,
             "device": str(self.model.device) if hasattr(self.model, 'device') else "unknown",
-            "model_config": self.model._modules if hasattr(self.model, '_modules') else {}
+            "batch_size": self.config.batch_size,
+            "use_gpu": self.config.use_gpu,
+            "gpu_available": self._gpu_capability.can_use_gpu if self._gpu_capability else False
         }
+        
+        # Add GPU-specific information
+        if self._gpu_capability and self._gpu_capability.can_use_gpu:
+            info["gpu_info"] = {
+                "gpu_count": self._gpu_capability.gpu_count,
+                "gpu_names": self._gpu_capability.gpu_names,
+                "gpu_memory_total_gb": self._gpu_capability.gpu_memory_total / (1024**3) if self._gpu_capability.gpu_memory_total else 0,
+                "gpu_memory_free_gb": self._gpu_capability.gpu_memory_free / (1024**3) if self._gpu_capability.gpu_memory_free else 0,
+                "recommended_batch_size": self._gpu_capability.recommended_batch_size
+            }
+        
+        return info
+    
+    @property
+    def is_using_gpu(self) -> bool:
+        """Check if the model is currently using GPU."""
+        if not self.model:
+            return False
+        
+        device_str = str(self.model.device) if hasattr(self.model, 'device') else ""
+        return "cuda" in device_str.lower() or self.config.use_gpu

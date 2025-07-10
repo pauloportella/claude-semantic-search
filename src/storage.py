@@ -19,6 +19,7 @@ import faiss
 from tqdm import tqdm
 
 from .chunker import Chunk
+from .gpu_utils import assess_gpu_capability, log_gpu_status
 
 
 @dataclass
@@ -34,6 +35,8 @@ class StorageConfig:
     normalize_embeddings: bool = True
     auto_save: bool = True
     backup_enabled: bool = True
+    use_gpu: bool = False
+    gpu_memory_fraction: float = 0.8  # Fraction of GPU memory to use
     
 
 @dataclass
@@ -75,6 +78,23 @@ class HybridStorage:
         self.faiss_index: Optional[faiss.Index] = None
         self.chunk_id_to_faiss_id: Dict[str, int] = {}
         self.faiss_id_to_chunk_id: Dict[int, str] = {}
+        
+        # GPU components
+        self._gpu_capability = None
+        self._gpu_resources = None
+        self._is_gpu_index = False
+        
+        # If GPU is requested, assess capability
+        if self.config.use_gpu:
+            self._gpu_capability = assess_gpu_capability()
+            if not self._gpu_capability.can_use_gpu:
+                self.logger.warning(f"GPU requested but not available: {self._gpu_capability.status_message}")
+                self.logger.info("Falling back to CPU storage")
+                self.config.use_gpu = False
+            elif "Apple Silicon MPS" in self._gpu_capability.status_message:
+                # For Apple Silicon, only embeddings are accelerated, FAISS stays on CPU
+                self.logger.info("Apple Silicon detected: embeddings will use MPS, FAISS will use CPU")
+                self.config.use_gpu = False  # Don't try to use GPU for FAISS on Apple Silicon
         
         # Stats
         self.total_chunks = 0
@@ -152,22 +172,74 @@ class HybridStorage:
     
     def _init_faiss(self) -> None:
         """Initialize FAISS index."""
+        # Create CPU index first
+        cpu_index = self._create_cpu_index()
+        
+        # Convert to GPU if requested and available
+        if self.config.use_gpu and self._gpu_capability and self._gpu_capability.can_use_gpu:
+            try:
+                self.faiss_index = self._convert_to_gpu_index(cpu_index)
+                self._is_gpu_index = True
+                self.logger.info(f"Initialized GPU FAISS index: {type(self.faiss_index).__name__}")
+                
+                if self._gpu_capability:
+                    log_gpu_status(self._gpu_capability, self.logger)
+            except Exception as e:
+                self.logger.error(f"Failed to create GPU index: {e}")
+                self.logger.info("Falling back to CPU index")
+                self.faiss_index = cpu_index
+                self._is_gpu_index = False
+        else:
+            self.faiss_index = cpu_index
+            self._is_gpu_index = False
+            self.logger.info(f"Initialized CPU FAISS index: {type(self.faiss_index).__name__}")
+    
+    def _create_cpu_index(self) -> faiss.Index:
+        """Create CPU FAISS index."""
         if self.config.index_type == "flat":
             if self.config.normalize_embeddings:
-                self.faiss_index = faiss.IndexFlatIP(self.embedding_dim)
+                return faiss.IndexFlatIP(self.embedding_dim)
             else:
-                self.faiss_index = faiss.IndexFlatL2(self.embedding_dim)
+                return faiss.IndexFlatL2(self.embedding_dim)
         elif self.config.index_type == "ivf":
             quantizer = faiss.IndexFlatL2(self.embedding_dim)
-            self.faiss_index = faiss.IndexIVFFlat(
+            return faiss.IndexIVFFlat(
                 quantizer, self.embedding_dim, self.config.ivf_nlist
             )
         elif self.config.index_type == "hnsw":
-            self.faiss_index = faiss.IndexHNSWFlat(self.embedding_dim, self.config.hnsw_m)
+            return faiss.IndexHNSWFlat(self.embedding_dim, self.config.hnsw_m)
         else:
             raise ValueError(f"Unknown index type: {self.config.index_type}")
-        
-        self.logger.info(f"Initialized FAISS index: {type(self.faiss_index).__name__}")
+    
+    def _convert_to_gpu_index(self, cpu_index: faiss.Index) -> faiss.Index:
+        """Convert CPU index to GPU index."""
+        try:
+            # Create GPU resources
+            if not self._gpu_resources:
+                self._gpu_resources = faiss.StandardGpuResources()
+                
+                # Set memory fraction if specified
+                if self.config.gpu_memory_fraction < 1.0:
+                    # Note: This is a simplified memory management approach
+                    # More sophisticated memory management could be implemented
+                    pass
+            
+            # Convert index to GPU
+            gpu_index = faiss.index_cpu_to_gpu(self._gpu_resources, 0, cpu_index)
+            return gpu_index
+            
+        except AttributeError:
+            raise RuntimeError("FAISS GPU functions not available. Install faiss-gpu package.")
+        except Exception as e:
+            raise RuntimeError(f"Failed to convert index to GPU: {str(e)}")
+    
+    def _convert_to_cpu_index(self, gpu_index: faiss.Index) -> faiss.Index:
+        """Convert GPU index to CPU index for saving."""
+        try:
+            return faiss.index_gpu_to_cpu(gpu_index)
+        except Exception as e:
+            self.logger.error(f"Failed to convert GPU index to CPU: {e}")
+            raise
     
     def _load_existing_data(self) -> None:
         """Load existing data from storage."""
@@ -487,7 +559,7 @@ class HybridStorage:
         faiss_size = self.index_path.stat().st_size if self.index_path.exists() else 0
         db_size = self.db_path.stat().st_size if self.db_path.exists() else 0
         
-        return {
+        stats = {
             "total_chunks": total_chunks,
             "total_sessions": total_sessions,
             "total_projects": total_projects,
@@ -496,13 +568,36 @@ class HybridStorage:
             "database_size": db_size,
             "total_storage_size": faiss_size + db_size,
             "embedding_dimension": self.embedding_dim,
-            "index_type": self.config.index_type
+            "index_type": self.config.index_type,
+            "use_gpu": self.config.use_gpu,
+            "is_gpu_index": self._is_gpu_index
         }
+        
+        # Add GPU-specific information
+        if self._gpu_capability:
+            stats["gpu_info"] = {
+                "gpu_available": self._gpu_capability.can_use_gpu,
+                "gpu_count": self._gpu_capability.gpu_count,
+                "gpu_names": self._gpu_capability.gpu_names,
+                "status_message": self._gpu_capability.status_message
+            }
+            
+            if self._gpu_capability.gpu_memory_total:
+                stats["gpu_info"]["gpu_memory_total_gb"] = self._gpu_capability.gpu_memory_total / (1024**3)
+                stats["gpu_info"]["gpu_memory_free_gb"] = self._gpu_capability.gpu_memory_free / (1024**3)
+        
+        return stats
     
     def save_index(self) -> None:
         """Save FAISS index to disk."""
-        faiss.write_index(self.faiss_index, str(self.index_path))
-        self.logger.info(f"Saved FAISS index to {self.index_path}")
+        if self._is_gpu_index:
+            # Convert GPU index to CPU for saving
+            cpu_index = self._convert_to_cpu_index(self.faiss_index)
+            faiss.write_index(cpu_index, str(self.index_path))
+            self.logger.info(f"Saved GPU FAISS index (converted to CPU) to {self.index_path}")
+        else:
+            faiss.write_index(self.faiss_index, str(self.index_path))
+            self.logger.info(f"Saved CPU FAISS index to {self.index_path}")
     
     def backup(self, backup_dir: str) -> None:
         """Create backup of storage."""
