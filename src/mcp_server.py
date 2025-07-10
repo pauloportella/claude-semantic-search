@@ -127,8 +127,9 @@ def get_search_cli(use_gpu: bool = False) -> SemanticSearchCLI:
     """Get or create search CLI instance with appropriate settings."""
     global search_cli
     if search_cli is None or search_cli.use_gpu != use_gpu:
-        data_dir = Path.home() / ".claude" / "semantic-search" / "data"
-        search_cli = SemanticSearchCLI(str(data_dir), use_gpu=use_gpu)
+        # Use the same default data directory as the CLI
+        data_dir = "./data"
+        search_cli = SemanticSearchCLI(data_dir, use_gpu=use_gpu)
     return search_cli
 
 
@@ -252,8 +253,10 @@ async def call_tool(name: str, arguments: Any) -> List[TextContent]:
 
     elif name == "get_status":
         # Check daemon status
-        pid_file = Path.home() / ".claude" / "semantic-search" / "daemon.pid"
+        # Note: The current implementation doesn't use a daemon, so this is always false
+        # TODO: Implement daemon functionality if needed
         is_running = False
+        pid_file = Path("./data/daemon.pid")  # Placeholder path
 
         if pid_file.exists():
             try:
@@ -263,8 +266,9 @@ async def call_tool(name: str, arguments: Any) -> List[TextContent]:
             except Exception:
                 is_running = False
 
-        # Get last index time
-        db_path = Path.home() / ".claude" / "semantic-search" / "data" / "metadata.db"
+        # Get last index time from the actual data directory
+        cli = get_search_cli()
+        db_path = Path(cli.data_dir) / "metadata.db"
         last_indexed = "Never"
         if db_path.exists():
             try:
@@ -283,7 +287,7 @@ async def call_tool(name: str, arguments: Any) -> List[TextContent]:
                 text=f"**Indexing Status**\n\n"
                 f"- Daemon running: {'✅ Yes' if is_running else '❌ No'}\n"
                 f"- Last index update: {last_indexed}\n"
-                f"- Index location: ~/.claude/semantic-search/data/\n",
+                f"- Index location: {cli.data_dir}/\n",
             )
         ]
 
@@ -301,5 +305,10 @@ async def main():
         )
 
 
-if __name__ == "__main__":
+def run():
+    """Entry point for the MCP server."""
     asyncio.run(main())
+
+
+if __name__ == "__main__":
+    run()

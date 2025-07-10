@@ -43,7 +43,7 @@ claude-watch = "src.cli:watch_command"
 claude-start = "src.cli:start_command"
 claude-stop = "src.cli:stop_command"
 claude-status = "src.cli:status_command"
-claude-search-mcp = "src.mcp_server:main"
+claude-search-mcp = "src.mcp_server:run"
 setup-models = "scripts.model_setup:main"
 
 [build-system]
