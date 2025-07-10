@@ -93,10 +93,11 @@ class TestMCPServer:
             filters = call_args[0][1]  # Second positional argument
             config = call_args[0][2]  # Third positional argument
 
-            assert filters["project"] == "my-project"
+            assert filters["project_name"] == "my-project"
             assert filters["has_code"] is True
-            assert filters["after_date"] == "2025-07-01"
-            assert filters["before_date"] == "2025-07-10"
+            assert "timestamp" in filters
+            assert filters["timestamp"]["gte"] == "2025-07-01T00:00:00+00:00"
+            assert filters["timestamp"]["lte"] == "2025-07-10T23:59:59+00:00"
             assert filters["session_id"] == "session_456"
             assert config.top_k == 5
             

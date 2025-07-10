@@ -144,13 +144,19 @@ async def call_tool(name: str, arguments: Any) -> List[TextContent]:
         filters = {}
 
         if arguments.get("project"):
-            filters["project"] = arguments["project"]
+            filters["project_name"] = arguments["project"]
         if arguments.get("has_code"):
             filters["has_code"] = True
-        if arguments.get("after"):
-            filters["after_date"] = arguments["after"]
-        if arguments.get("before"):
-            filters["before_date"] = arguments["before"]
+        # Handle date filters
+        if arguments.get("after") or arguments.get("before"):
+            timestamp_filter = {}
+            if arguments.get("after"):
+                after_dt = f"{arguments['after']}T00:00:00+00:00"
+                timestamp_filter["gte"] = after_dt
+            if arguments.get("before"):
+                before_dt = f"{arguments['before']}T23:59:59+00:00"
+                timestamp_filter["lte"] = before_dt
+            filters["timestamp"] = timestamp_filter
         if arguments.get("session"):
             filters["session_id"] = arguments["session"]
 
