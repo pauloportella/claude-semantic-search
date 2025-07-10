@@ -14,6 +14,8 @@ A powerful semantic search system for Claude conversations that enables fast, in
 - **Session Threading**: Search within specific conversation sessions
 - **Related Chunks**: Find related chunks within the same conversation session
 - **Direct Chunk Access**: Retrieve specific chunks by ID with full content
+- **Auto-Indexing Daemon**: Background service that automatically indexes new conversations
+- **Service Management**: Start/stop/status commands for managing the watcher daemon
 
 ## Installation
 
@@ -76,6 +78,28 @@ uv run claude-search "python testing" --json
 ```bash
 # Show index statistics
 uv run claude-stats
+```
+
+#### 4. Watch for Changes (Daemon Mode)
+
+```bash
+# Start watcher daemon
+uv run claude-start
+
+# Start with custom settings
+uv run claude-start --claude-dir /path/to/conversations --debounce 10
+
+# Check daemon status
+uv run claude-status
+
+# Stop daemon
+uv run claude-stop
+
+# Interactive watch mode (foreground)
+uv run claude-watch
+
+# Run watch as daemon (background)
+uv run claude-watch --daemon
 ```
 
 ### Advanced Usage

@@ -15,6 +15,7 @@ dependencies = [
     "huggingface-hub>=0.33.2",
     "scikit-learn>=1.7.0",
     "click>=8.2.1",
+    "watchdog>=4.0.0",
 ]
 
 [project.optional-dependencies]
@@ -31,6 +32,10 @@ dev = [
 claude-search = "src.cli:search_command"
 claude-index = "src.cli:index_command"
 claude-stats = "src.cli:stats_command"
+claude-watch = "src.cli:watch_command"
+claude-start = "src.cli:start_command"
+claude-stop = "src.cli:stop_command"
+claude-status = "src.cli:status_command"
 setup-models = "scripts.model_setup:main"
 
 [build-system]

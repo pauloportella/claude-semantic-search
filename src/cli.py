@@ -477,6 +477,73 @@ def stats(ctx):
         sys.exit(1)
 
 
+@cli.command()
+@click.option('--claude-dir', default='~/.claude/projects', help='Claude projects directory to watch')
+@click.option('--debounce', default=5, help='Debounce interval in seconds (default: 5)')
+@click.option('--daemon', is_flag=True, help='Run as background daemon')
+@click.pass_context
+def watch(ctx, claude_dir, debounce, daemon):
+    """Watch Claude conversations for changes and auto-index them."""
+    if daemon:
+        from .watcher import start_daemon
+        start_daemon(
+            data_dir=ctx.obj['data_dir'],
+            claude_dir=claude_dir,
+            debounce_seconds=debounce
+        )
+    else:
+        from .watcher import run_watcher
+        
+        click.echo(f"🔍 Starting file watcher...")
+        click.echo(f"   • Watching: {claude_dir}")
+        click.echo(f"   • Data directory: {ctx.obj['data_dir']}")
+        click.echo(f"   • Debounce interval: {debounce} seconds")
+        click.echo(f"   • Press Ctrl+C to stop")
+        click.echo()
+        
+        try:
+            run_watcher(
+                data_dir=ctx.obj['data_dir'],
+                claude_dir=claude_dir,
+                debounce_seconds=debounce
+            )
+        except KeyboardInterrupt:
+            click.echo("\n👋 File watcher stopped")
+        except Exception as e:
+            click.echo(f"❌ Watcher failed: {str(e)}")
+            sys.exit(1)
+
+
+@cli.command()
+@click.option('--claude-dir', default='~/.claude/projects', help='Claude projects directory to watch')
+@click.option('--debounce', default=5, help='Debounce interval in seconds (default: 5)')
+@click.pass_context
+def start(ctx, claude_dir, debounce):
+    """Start the file watcher daemon."""
+    from .watcher import start_daemon
+    start_daemon(
+        data_dir=ctx.obj['data_dir'],
+        claude_dir=claude_dir,
+        debounce_seconds=debounce
+    )
+
+
+@cli.command()
+@click.pass_context
+def stop(ctx):
+    """Stop the file watcher daemon."""
+    from .watcher import stop_daemon
+    stop_daemon(data_dir=ctx.obj['data_dir'])
+
+
+@cli.command()
+@click.pass_context  
+def status(ctx):
+    """Check the status of the file watcher daemon."""
+    from .watcher import daemon_status
+    daemon_status(data_dir=ctx.obj['data_dir'])
+
+
 # Legacy function names for pyproject.toml compatibility
 def index_command():
     """Entry point for claude-index command."""
@@ -494,6 +561,30 @@ def stats_command():
     """Entry point for claude-stats command."""
     sys.argv = ['claude-stats'] + sys.argv[1:]
     cli(['stats'] + sys.argv[1:])
+
+
+def watch_command():
+    """Entry point for claude-watch command."""
+    sys.argv = ['claude-watch'] + sys.argv[1:]
+    cli(['watch'] + sys.argv[1:])
+
+
+def start_command():
+    """Entry point for claude-start command."""
+    sys.argv = ['claude-start'] + sys.argv[1:]
+    cli(['start'] + sys.argv[1:])
+
+
+def stop_command():
+    """Entry point for claude-stop command."""
+    sys.argv = ['claude-stop'] + sys.argv[1:]
+    cli(['stop'] + sys.argv[1:])
+
+
+def status_command():
+    """Entry point for claude-status command."""
+    sys.argv = ['claude-status'] + sys.argv[1:]
+    cli(['status'] + sys.argv[1:])
 
 
 if __name__ == '__main__':
