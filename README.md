@@ -300,25 +300,43 @@ If GPU support fails, the system automatically falls back to CPU with a warning 
 
 ## Architecture
 
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   JSONL Files   │───▶│   Chunking &    │───▶│   Embeddings    │
-│  (~/.claude/)   │    │   Parsing       │    │  (all-mpnet)    │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-                                                       │
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│  Alfred Query   │◀───│  Search Engine  │◀───│ Hybrid Storage  │
-│   Interface     │    │   (Semantic +   │    │ FAISS + SQLite  │
-└─────────────────┘    │   Metadata)     │    └─────────────────┘
-                       └─────────────────┘
+```mermaid
+graph TB
+    subgraph "Data Processing Pipeline"
+        A[JSONL Files<br/>~/.claude/] --> B[Chunking &<br/>Parsing]
+        B --> C[Embeddings<br/>all-mpnet]
+        C --> D[Hybrid Storage<br/>FAISS + SQLite]
+    end
+    
+    D --> E[Core Search API<br/>SemanticSearchCLI]
+    
+    subgraph "Interfaces Layer"
+        E --> F[CLI<br/>uv run...]
+        E --> G[MCP Server<br/>Claude/Cursor]
+        E --> H[Alfred<br/>in dev]
+        E --> I[Future<br/>Interfaces]
+    end
+    
+    style A fill:#f9f,stroke:#333,stroke-width:2px
+    style D fill:#bbf,stroke:#333,stroke-width:2px
+    style E fill:#bfb,stroke:#333,stroke-width:2px
 ```
 
 ### Components
 
-1. **Parser**: Extracts structured data from Claude conversation JSONL files
-2. **Chunker**: Creates semantic chunks using smart strategies (Q&A pairs, code blocks, context segments)
-3. **Embeddings**: Generates 768-dimensional vectors using all-mpnet-base-v2
-4. **Storage**: Hybrid FAISS + SQLite for fast semantic and metadata search
+1. **Data Processing Pipeline**:
+   - **Parser**: Extracts structured data from Claude conversation JSONL files
+   - **Chunker**: Creates semantic chunks using smart strategies (Q&A pairs, code blocks, context segments)
+   - **Embeddings**: Generates 768-dimensional vectors using all-mpnet-base-v2
+   - **Storage**: Hybrid FAISS + SQLite for fast semantic and metadata search
+
+2. **Core Search API**: Shared search logic used by all interfaces
+
+3. **Interface Layer**:
+   - **CLI**: Command-line tools for direct terminal use
+   - **MCP Server**: Enables integration with Claude Desktop and Cursor IDE
+   - **Alfred**: macOS workflow integration (in development)
+   - **Future**: Extensible for REST API, gRPC, etc.
 
 ## Performance
 
