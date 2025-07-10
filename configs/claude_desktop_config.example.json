@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "claude-search": {
+      "command": "uv",
+      "args": ["run", "claude-search-mcp"],
+      "cwd": "/Users/YOUR_USERNAME/path/to/semantic-search"
+    }
+  }
+}

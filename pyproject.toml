@@ -17,6 +17,7 @@ dependencies = [
     "click>=8.2.1",
     "watchdog>=4.0.0",
     "psutil>=5.9.0",
+    "mcp==1.10.1",
 ]
 
 [project.optional-dependencies]
@@ -42,6 +43,7 @@ claude-watch = "src.cli:watch_command"
 claude-start = "src.cli:start_command"
 claude-stop = "src.cli:stop_command"
 claude-status = "src.cli:status_command"
+claude-search-mcp = "src.mcp_server:main"
 setup-models = "scripts.model_setup:main"
 
 [build-system]
@@ -107,5 +109,6 @@ strict_equality = true
 [dependency-groups]
 dev = [
     "pytest>=8.4.1",
+    "pytest-asyncio>=1.0.0",
     "pytest-cov>=6.2.1",
 ]

@@ -1,18 +1,24 @@
 # Claude Semantic Search
 
-A powerful semantic search system for Claude conversations that enables fast, intelligent retrieval through natural language queries.
+A powerful semantic search system for Claude conversations that enables fast, intelligent retrieval through natural language queries. Now with MCP (Model Context Protocol) server support for seamless Claude Desktop integration!
 
 ## Features
 
 - **Semantic Search**: Uses all-mpnet-base-v2 embeddings for high-quality semantic matching
 - **Hybrid Storage**: Combines FAISS vector search with SQLite metadata storage
 - **Smart Chunking**: Context-aware chunking optimized for code discussions and Q&A pairs
-- **CLI Interface**: Simple command-line tools for indexing and searching
-- **Alfred Integration**: JSON output format ready for Alfred workflows
-- **Incremental Updates**: Efficient indexing of new conversations
-- **Date-based Filtering**: Filter search results by date ranges
-- **Session Threading**: Search within specific conversation sessions
-- **Related Chunks**: Find related chunks within the same conversation session
+- **Multiple Interfaces**:
+  - **CLI**: Command-line tools for indexing and searching
+  - **MCP Server**: Native Claude Desktop integration
+  - **Alfred Ready**: JSON output format for Alfred workflows
+- **Incremental Indexing**: Only processes new/modified files after initial index
+- **GPU Acceleration**: Optional GPU support for faster search (CUDA/MPS)
+- **Advanced Filtering**:
+  - Date ranges (before/after)
+  - Project filtering
+  - Code content filtering
+  - Session-based search
+  - Related chunk discovery
 - **Direct Chunk Access**: Retrieve specific chunks by ID with full content
 - **Auto-Indexing Daemon**: Background service that automatically indexes new conversations
 - **Service Management**: Start/stop/status commands for managing the watcher daemon
@@ -307,6 +313,35 @@ query="$1"
 cd /path/to/semantic-search
 uv run claude-search "$query" --json
 ```
+
+## MCP Server Integration
+
+The MCP (Model Context Protocol) server enables native integration with Claude Desktop, allowing you to search your conversation history directly within Claude.
+
+### Quick Setup
+
+1. **Configure Claude Desktop**:
+   ```bash
+   cp configs/claude_desktop_config.example.json ~/Library/Application\ Support/Claude/claude_desktop_config.json
+   # Edit the config and set your correct path
+   ```
+
+2. **Restart Claude Desktop**
+
+3. **Use natural language** to search:
+   - "Search for GPU performance discussions"
+   - "Find conversations about daisy project with code"
+   - "Show me all indexed projects"
+
+### Available MCP Tools
+
+- `semantic_search`: Full-featured search with all filtering options
+- `get_chunk_by_id`: Retrieve specific chunks
+- `list_projects`: List all indexed projects
+- `get_stats`: View index statistics
+- `get_status`: Check daemon status
+
+For detailed MCP setup and usage, see [MCP_SERVER_README.md](MCP_SERVER_README.md).
 
 ## Development
 

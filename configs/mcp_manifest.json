@@ -1,0 +1,43 @@
+{
+  "name": "claude-search",
+  "version": "1.0.0",
+  "description": "Semantic search for Claude conversations",
+  "author": "Paulo Portella",
+  "license": "MIT",
+  "runtime": "python",
+  "main": "uv run claude-search-mcp",
+  "tools": [
+    {
+      "name": "semantic_search",
+      "description": "Search Claude conversations using semantic similarity"
+    },
+    {
+      "name": "get_chunk_by_id",
+      "description": "Get a specific conversation chunk by its ID"
+    },
+    {
+      "name": "list_projects",
+      "description": "List all indexed Claude projects"
+    },
+    {
+      "name": "get_stats",
+      "description": "Get search index statistics"
+    },
+    {
+      "name": "get_status",
+      "description": "Get the status of the indexing daemon"
+    }
+  ],
+  "resources": [
+    {
+      "name": "recent_conversations",
+      "description": "Recent conversation chunks",
+      "mimeType": "text/plain"
+    },
+    {
+      "name": "project_conversations",
+      "description": "Conversations by project",
+      "mimeType": "text/plain"
+    }
+  ]
+}
