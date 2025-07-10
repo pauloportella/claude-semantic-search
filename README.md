@@ -2,6 +2,10 @@
 
 A powerful semantic search system for Claude conversations that enables fast, intelligent retrieval through natural language queries. Access your Claude Code sessions from anywhere - Claude Code itself, CLI, Claude Desktop, Cursor IDE, and Alfred (in development)!
 
+<img width="2551" height="1471" alt="image" src="https://github.com/user-attachments/assets/b5d35184-27b7-44c3-b4aa-9dc7c6e21af6" />
+<img width="744" height="557" alt="image" src="https://github.com/user-attachments/assets/fb9c87f1-0637-481f-82c9-45842a3a6b19" />
+
+
 ## Why This Project?
 
 Ever wished you could instantly find that Claude Code conversation where you solved a tricky bug or implemented a complex feature? This project was born from the need to easily retrieve Claude Code sessions from anywhere - whether you're in Claude Code itself, working in your terminal, using Claude Desktop, coding in Cursor IDE, or even through Alfred on macOS.
