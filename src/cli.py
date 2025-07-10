@@ -318,7 +318,7 @@ def index(ctx, claude_dir, force, gpu):
 @cli.command()
 @click.argument("query")
 @click.option("--top-k", default=10, help="Number of results to return")
-@click.option("--project", help="Filter by project name")
+@click.option("--project", help="Filter by project name (supports partial matching)")
 @click.option("--has-code", is_flag=True, help="Filter for chunks with code")
 @click.option("--after", help="Filter for chunks after date (YYYY-MM-DD)")
 @click.option("--before", help="Filter for chunks before date (YYYY-MM-DD)")

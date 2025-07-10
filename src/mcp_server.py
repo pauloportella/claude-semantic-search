@@ -42,7 +42,7 @@ async def list_tools() -> List[Tool]:
                     },
                     "project": {
                         "type": "string",
-                        "description": "Filter by project name",
+                        "description": "Filter by project name (supports partial matching)",
                     },
                     "has_code": {
                         "type": "boolean",

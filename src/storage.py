@@ -499,9 +499,15 @@ class HybridStorage:
                 if chunk_value not in value:
                     return False
             else:
-                # Handle exact match
-                if chunk_value != value:
-                    return False
+                # Handle string matching
+                if key == "project_name" and isinstance(value, str) and isinstance(chunk_value, str):
+                    # For project names, use case-insensitive contains matching
+                    if value.lower() not in chunk_value.lower():
+                        return False
+                else:
+                    # Handle exact match for other fields
+                    if chunk_value != value:
+                        return False
 
         return True
 
