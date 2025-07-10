@@ -227,11 +227,12 @@ def index(ctx, claude_dir, force):
 @click.option('--has-code', is_flag=True, help='Filter for chunks with code')
 @click.option('--after', help='Filter for chunks after date (YYYY-MM-DD)')
 @click.option('--before', help='Filter for chunks before date (YYYY-MM-DD)')
+@click.option('--session', help='Filter by session ID')
 @click.option('--full-content', is_flag=True, help='Show full content instead of truncated')
 @click.option('--chunk-id', help='Get specific chunk by ID (ignores query and other filters)')
 @click.option('--json', 'output_json', is_flag=True, help='Output results as JSON')
 @click.pass_context
-def search(ctx, query, top_k, project, has_code, after, before, full_content, chunk_id, output_json):
+def search(ctx, query, top_k, project, has_code, after, before, session, full_content, chunk_id, output_json):
     """Search through indexed conversations."""
     cli_instance = SemanticSearchCLI(ctx.obj['data_dir'])
     
@@ -285,6 +286,8 @@ def search(ctx, query, top_k, project, has_code, after, before, full_content, ch
         filters['project_name'] = project
     if has_code:
         filters['has_code'] = True
+    if session:
+        filters['session_id'] = session
     
     # Add date filters
     if after or before:

@@ -648,6 +648,141 @@ class TestCLICommands:
         assert item['text'] == 'JSON chunk content'
         assert item['variables']['project'] == 'json_project'
         assert item['variables']['session'] == 'json_session'
+    
+    @patch('src.cli.SemanticSearchCLI.search_conversations')
+    def test_search_command_session_filtering(self, mock_search_conversations):
+        """Test search command with session filtering."""
+        mock_search_conversations.return_value = [
+            {
+                "chunk_id": "test_chunk_1",
+                "similarity": 0.95,
+                "text": "First result from session",
+                "project": "test_project",
+                "session": "test_session_123",
+                "timestamp": "2025-06-15T12:00:00Z",
+                "has_code": False,
+            },
+            {
+                "chunk_id": "test_chunk_2",
+                "similarity": 0.90,
+                "text": "Second result from session", 
+                "project": "test_project",
+                "session": "test_session_123",
+                "timestamp": "2025-06-15T12:05:00Z",
+                "has_code": True,
+            }
+        ]
+        
+        result = self.runner.invoke(cli, [
+            '--data-dir', self.temp_dir,
+            'search', 'test query',
+            '--session', 'test_session_123'
+        ])
+        
+        assert result.exit_code == 0
+        assert "Found 2 results" in result.output
+        
+        # Verify the search_conversations was called with session filter
+        mock_search_conversations.assert_called_once()
+        call_args = mock_search_conversations.call_args
+        filters = call_args[0][1]  # Second argument is filters
+        
+        assert 'session_id' in filters
+        assert filters['session_id'] == 'test_session_123'
+    
+    @patch('src.cli.SemanticSearchCLI.search_conversations')
+    def test_search_command_session_with_other_filters(self, mock_search_conversations):
+        """Test search command with session filter combined with other filters."""
+        mock_search_conversations.return_value = [
+            {
+                "chunk_id": "test_chunk",
+                "similarity": 0.95,
+                "text": "Result with session and date filter",
+                "project": "filtered_project",
+                "session": "specific_session",
+                "timestamp": "2025-06-15T12:00:00Z",
+                "has_code": True,
+            }
+        ]
+        
+        result = self.runner.invoke(cli, [
+            '--data-dir', self.temp_dir,
+            'search', 'test query',
+            '--session', 'specific_session',
+            '--project', 'filtered_project',
+            '--has-code',
+            '--after', '2025-06-01',
+            '--before', '2025-06-30'
+        ])
+        
+        assert result.exit_code == 0
+        assert "Found 1 results" in result.output
+        
+        # Verify all filters were applied
+        call_args = mock_search_conversations.call_args
+        filters = call_args[0][1]
+        
+        assert filters['session_id'] == 'specific_session'
+        assert filters['project_name'] == 'filtered_project'
+        assert filters['has_code'] is True
+        assert 'timestamp' in filters
+        assert filters['timestamp']['gte'] == '2025-06-01T00:00:00+00:00'
+        assert filters['timestamp']['lte'] == '2025-06-30T23:59:59+00:00'
+    
+    @patch('src.cli.SemanticSearchCLI.search_conversations')
+    def test_search_command_session_no_results(self, mock_search_conversations):
+        """Test search command with session filter that returns no results."""
+        mock_search_conversations.return_value = []
+        
+        result = self.runner.invoke(cli, [
+            '--data-dir', self.temp_dir,
+            'search', 'test query',
+            '--session', 'nonexistent_session'
+        ])
+        
+        assert result.exit_code == 0
+        assert "Found 0 results" in result.output
+        
+        # Verify the session filter was applied
+        call_args = mock_search_conversations.call_args
+        filters = call_args[0][1]
+        assert filters['session_id'] == 'nonexistent_session'
+    
+    @patch('src.cli.SemanticSearchCLI.search_conversations')
+    def test_search_command_session_json_output(self, mock_search_conversations):
+        """Test search command with session filter and JSON output."""
+        mock_search_conversations.return_value = [
+            {
+                "chunk_id": "session_chunk",
+                "similarity": 0.95,
+                "text": "Session filtered result",
+                "project": "session_project",
+                "session": "json_session_456",
+                "timestamp": "2025-06-15T12:00:00Z",
+                "has_code": False,
+            }
+        ]
+        
+        result = self.runner.invoke(cli, [
+            '--data-dir', self.temp_dir,
+            'search', 'test query',
+            '--session', 'json_session_456',
+            '--json'
+        ])
+        
+        assert result.exit_code == 0
+        
+        # Parse JSON output
+        import json
+        output_data = json.loads(result.output.strip())
+        
+        assert 'items' in output_data
+        assert len(output_data['items']) == 1
+        
+        item = output_data['items'][0]
+        assert item['uid'] == 'session_chunk'
+        assert item['variables']['session'] == 'json_session_456'
+        assert item['variables']['project'] == 'session_project'
 
 
 class TestCLIIntegration:
