@@ -1,29 +1,37 @@
 # Claude Semantic Search
 
-A powerful semantic search system for Claude conversations that enables fast, intelligent retrieval through natural language queries. Now with MCP (Model Context Protocol) server support for seamless Claude Desktop integration!
+A powerful semantic search system for Claude conversations that enables fast, intelligent retrieval through natural language queries. Access your Claude Code sessions from anywhere - Claude Code itself, CLI, Claude Desktop, Cursor IDE, and Alfred (in development)!
+
+## Why This Project?
+
+Ever wished you could instantly find that Claude Code conversation where you solved a tricky bug or implemented a complex feature? This project was born from the need to easily retrieve Claude Code sessions from anywhere - whether you're in Claude Code itself, working in your terminal, using Claude Desktop, coding in Cursor IDE, or even through Alfred on macOS.
+
+Your Claude conversations contain valuable knowledge - code solutions, architectural decisions, debugging sessions, and implementation details. This tool makes that knowledge instantly searchable and accessible across all your development workflows.
 
 ## Features
 
+### Multi-Platform Access
+- **Claude Code**: Search directly within Claude Code using MCP tools
+- **CLI**: Powerful command-line tools for indexing and searching
+- **Claude Desktop**: Native integration via MCP server
+- **Cursor IDE**: Full MCP tool support for searching within your editor
+- **Alfred**: JSON output for workflow integration (in development)
+
+### Core Features
 - **Semantic Search**: Uses all-mpnet-base-v2 embeddings for high-quality semantic matching
 - **Hybrid Storage**: Combines FAISS vector search with SQLite metadata storage
 - **Smart Chunking**: Context-aware chunking optimized for code discussions and Q&A pairs
-- **Multiple Interfaces**:
-  - **CLI**: Command-line tools for indexing and searching
-  - **MCP Server**: Native Claude Desktop integration
-  - **Alfred Ready**: JSON output format for Alfred workflows
 - **Incremental Indexing**: Only processes new/modified files after initial index
-- **GPU Acceleration**: Optional GPU support for faster search (CUDA/MPS)
-- **Advanced Filtering**:
-  - Date ranges (before/after)
-  - Project filtering with partial matching (case-insensitive)
-  - Code content filtering
-  - Session-based search
-  - Related chunk discovery
-- **Direct Chunk Access**: Retrieve specific chunks by ID with full content
+- **GPU Acceleration**: Optional CUDA/MPS support for 5-10x performance improvements
 - **Auto-Indexing Daemon**: Background service that automatically indexes new conversations
-- **Service Management**: Start/stop/status commands for managing the watcher daemon
-- **GPU Acceleration**: Optional GPU support for 5-10x performance improvements
-- **Automatic Fallback**: Graceful CPU fallback when GPU is unavailable
+
+### Advanced Filtering
+- Date ranges (before/after)
+- Project filtering with partial matching (case-insensitive)
+- Code content filtering
+- Session-based search
+- Related chunk discovery
+- Direct chunk access by ID
 
 ## Installation
 
@@ -36,8 +44,8 @@ A powerful semantic search system for Claude conversations that enables fast, in
 
 1. **Clone and setup the project:**
 ```bash
-git clone <repository-url>
-cd semantic-search
+git clone https://github.com/pauloportella/claude-semantic-search
+cd claude-semantic-search
 uv sync
 ```
 
@@ -54,6 +62,31 @@ uv run setup-models
 ```
 
 This downloads the all-mpnet-base-v2 model (~420MB) for high-quality embeddings.
+
+## Quick Start
+
+### 1. Index Your Conversations
+```bash
+uv run claude-index
+```
+
+### 2. Search from Terminal
+```bash
+uv run claude-search "your search query"
+```
+
+### 3. Enable in Claude Desktop/Cursor
+```bash
+# For Claude Desktop
+cp configs/claude_desktop_config.example.json ~/Library/Application\ Support/Claude/claude_desktop_config.json
+
+# For Cursor IDE
+# Add to ~/.cursor/mcp.json (see MCP_SERVER_README.md for details)
+```
+
+Then restart Claude Desktop or Cursor and search naturally:
+- "Search for my GPU performance discussions"
+- "Find conversations about the daisy project with code"
 
 ## Usage
 
@@ -317,22 +350,29 @@ uv run claude-search "$query" --json
 
 ## MCP Server Integration
 
-The MCP (Model Context Protocol) server enables native integration with Claude Desktop, allowing you to search your conversation history directly within Claude.
+The MCP (Model Context Protocol) server enables native integration with Claude Desktop and Cursor IDE, allowing you to search your conversation history directly within your AI tools.
 
 ### Quick Setup
 
-1. **Configure Claude Desktop**:
-   ```bash
-   cp configs/claude_desktop_config.example.json ~/Library/Application\ Support/Claude/claude_desktop_config.json
-   # Edit the config and set your correct path
-   ```
+#### Claude Desktop
+```bash
+cp configs/claude_desktop_config.example.json ~/Library/Application\ Support/Claude/claude_desktop_config.json
+# Edit the config and set your correct path
+```
 
-2. **Restart Claude Desktop**
-
-3. **Use natural language** to search:
-   - "Search for GPU performance discussions"
-   - "Find conversations about daisy project with code"
-   - "Show me all indexed projects"
+#### Cursor IDE
+Add to `~/.cursor/mcp.json`:
+```json
+{
+  "mcpServers": {
+    "claude-search": {
+      "command": "/Users/USERNAME/.local/bin/uv",
+      "args": ["run", "--directory", "/path/to/claude-semantic-search", "claude-search-mcp"],
+      "cwd": "/path/to/claude-semantic-search"
+    }
+  }
+}
+```
 
 ### Available MCP Tools
 
@@ -342,7 +382,15 @@ The MCP (Model Context Protocol) server enables native integration with Claude D
 - `get_stats`: View index statistics
 - `get_status`: Check daemon status
 
-For detailed MCP setup and usage, see [MCP_SERVER_README.md](MCP_SERVER_README.md).
+### Example Usage
+
+In Claude Desktop or Cursor, simply ask:
+- "Search for my GPU performance discussions"
+- "Find conversations about daisy project with code"
+- "Show me all indexed projects"
+- "Get chunk chunk_12345"
+
+For detailed MCP setup and troubleshooting, see [MCP_SERVER_README.md](MCP_SERVER_README.md).
 
 ## Development
 

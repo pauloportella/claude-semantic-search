@@ -80,6 +80,9 @@ data/embeddings.faiss.index
 *.db
 *.sqlite
 *.sqlite3
+# Keep demo files
+!data/demo/embeddings.faiss
+!data/demo/metadata.db
 
 # Logs
 *.log

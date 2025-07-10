@@ -2,7 +2,7 @@
 
 ## Overview
 
-The MCP (Model Context Protocol) server provides a seamless integration between Claude Desktop and your semantic search index, allowing you to search your Claude conversation history using natural language.
+The MCP (Model Context Protocol) server provides seamless integration between your AI tools (Claude Desktop, Cursor IDE, and Claude Code itself) and your semantic search index, allowing you to search your Claude conversation history using natural language from anywhere you work.
 
 ## Installation
 
@@ -163,6 +163,66 @@ get_chunk_by_id({
 
 ## Troubleshooting
 
+### UV Run Configuration Issues in Cursor
+
+If the MCP server shows tools but doesn't retrieve results in Cursor, you need to use the full path to `uv`:
+
+1. **Find your UV path:**
+```bash
+which uv  # Usually outputs: /Users/USERNAME/.local/bin/uv
+```
+
+2. **Update Cursor configuration with full UV path:**
+```json
+"claude-search": {
+  "command": "/Users/jrbaron/.local/bin/uv",
+  "args": [
+    "run",
+    "--directory",
+    "/path/to/semantic-search",
+    "claude-search-mcp"
+  ],
+  "cwd": "/path/to/semantic-search"
+}
+```
+
+3. **Alternative configurations if UV doesn't work:**
+
+Option A - UV run with Python module:
+```json
+"claude-search": {
+  "command": "/Users/jrbaron/.local/bin/uv",
+  "args": [
+    "run",
+    "--directory",
+    "/path/to/semantic-search",
+    "python",
+    "-m",
+    "src.mcp_server"
+  ],
+  "cwd": "/path/to/semantic-search"
+}
+```
+
+Option B - Direct venv Python (most reliable fallback):
+```json
+"claude-search": {
+  "command": "/path/to/semantic-search/.venv/bin/python",
+  "args": ["-m", "src.mcp_server"],
+  "cwd": "/path/to/semantic-search",
+  "env": {
+    "PYTHONPATH": "/path/to/semantic-search"
+  }
+}
+```
+
+4. **Test your configuration:**
+```bash
+# Test with initialization request
+echo '{"jsonrpc": "2.0", "method": "initialize", "params": {"capabilities": {}}, "id": 1}' | \
+  /Users/jrbaron/.local/bin/uv run claude-search-mcp
+```
+
 ### MCP server not appearing in Claude/Cursor
 1. Check that the config file is in the correct location:
    - Claude Desktop: `~/Library/Application Support/Claude/claude_desktop_config.json`
@@ -176,6 +236,7 @@ get_chunk_by_id({
 1. Verify your index is built: `uv run claude-stats`
 2. Check that the daemon is running: `uv run claude-status`
 3. Try a broader search query
+4. For Cursor: Ensure you're using the full path to `uv` (e.g., `/Users/USERNAME/.local/bin/uv`)
 
 ### Permission errors
 1. Ensure the semantic-search directory is accessible
