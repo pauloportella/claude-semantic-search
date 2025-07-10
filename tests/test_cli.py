@@ -389,6 +389,110 @@ class TestCLICommands:
         
         assert result.exit_code == 1
         assert "Failed to get stats" in result.output
+    
+    @patch('src.cli.SemanticSearchCLI.search_conversations')
+    def test_search_command_date_filtering(self, mock_search_conversations):
+        """Test search command with date filtering."""
+        mock_search_conversations.return_value = [
+            {
+                "chunk_id": "test_chunk",
+                "similarity": 0.95,
+                "text": "Test result within date range",
+                "project": "test_project",
+                "session": "test_session",
+                "timestamp": "2025-06-15T12:00:00Z",
+                "has_code": False,
+            }
+        ]
+        
+        result = self.runner.invoke(cli, [
+            '--data-dir', self.temp_dir, 
+            'search', 'test query',
+            '--after', '2025-06-01',
+            '--before', '2025-06-30'
+        ])
+        
+        assert result.exit_code == 0
+        assert "Found 1 results" in result.output
+        
+        # Verify the search_conversations was called with date filters
+        mock_search_conversations.assert_called_once()
+        call_args = mock_search_conversations.call_args
+        filters = call_args[0][1]  # Second argument is filters
+        
+        assert 'timestamp' in filters
+        assert 'gte' in filters['timestamp']
+        assert 'lte' in filters['timestamp']
+        assert filters['timestamp']['gte'] == '2025-06-01T00:00:00+00:00'
+        assert filters['timestamp']['lte'] == '2025-06-30T23:59:59+00:00'
+    
+    def test_search_command_invalid_after_date(self):
+        """Test search command with invalid after date."""
+        result = self.runner.invoke(cli, [
+            '--data-dir', self.temp_dir,
+            'search', 'test query',
+            '--after', 'invalid-date'
+        ])
+        
+        assert result.exit_code == 1
+        assert "Invalid date format for --after" in result.output
+        assert "Use YYYY-MM-DD format" in result.output
+    
+    def test_search_command_invalid_before_date(self):
+        """Test search command with invalid before date."""
+        result = self.runner.invoke(cli, [
+            '--data-dir', self.temp_dir,
+            'search', 'test query',
+            '--before', 'not-a-date'
+        ])
+        
+        assert result.exit_code == 1
+        assert "Invalid date format for --before" in result.output
+        assert "Use YYYY-MM-DD format" in result.output
+    
+    @patch('src.cli.SemanticSearchCLI.search_conversations')
+    def test_search_command_only_after_date(self, mock_search_conversations):
+        """Test search command with only after date."""
+        mock_search_conversations.return_value = []
+        
+        result = self.runner.invoke(cli, [
+            '--data-dir', self.temp_dir,
+            'search', 'test query',
+            '--after', '2025-01-01'
+        ])
+        
+        assert result.exit_code == 0
+        
+        # Verify the search_conversations was called with after filter only
+        call_args = mock_search_conversations.call_args
+        filters = call_args[0][1]
+        
+        assert 'timestamp' in filters
+        assert 'gte' in filters['timestamp']
+        assert 'lte' not in filters['timestamp']
+        assert filters['timestamp']['gte'] == '2025-01-01T00:00:00+00:00'
+    
+    @patch('src.cli.SemanticSearchCLI.search_conversations')
+    def test_search_command_only_before_date(self, mock_search_conversations):
+        """Test search command with only before date."""
+        mock_search_conversations.return_value = []
+        
+        result = self.runner.invoke(cli, [
+            '--data-dir', self.temp_dir,
+            'search', 'test query',
+            '--before', '2025-12-31'
+        ])
+        
+        assert result.exit_code == 0
+        
+        # Verify the search_conversations was called with before filter only
+        call_args = mock_search_conversations.call_args
+        filters = call_args[0][1]
+        
+        assert 'timestamp' in filters
+        assert 'lte' in filters['timestamp']
+        assert 'gte' not in filters['timestamp']
+        assert filters['timestamp']['lte'] == '2025-12-31T23:59:59+00:00'
 
 
 class TestCLIIntegration:

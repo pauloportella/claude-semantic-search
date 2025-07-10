@@ -172,7 +172,6 @@ class SemanticSearchCLI:
                 "session": result.metadata.get("session_id", "unknown"),
                 "timestamp": result.metadata.get("timestamp", "unknown"),
                 "has_code": result.metadata.get("has_code", False),
-                "has_tools": result.metadata.get("has_tools", False)
             })
         
         return formatted_results
@@ -226,10 +225,11 @@ def index(ctx, claude_dir, force):
 @click.option('--top-k', default=10, help='Number of results to return')
 @click.option('--project', help='Filter by project name')
 @click.option('--has-code', is_flag=True, help='Filter for chunks with code')
-@click.option('--has-tools', is_flag=True, help='Filter for chunks with tool usage')
+@click.option('--after', help='Filter for chunks after date (YYYY-MM-DD)')
+@click.option('--before', help='Filter for chunks before date (YYYY-MM-DD)')
 @click.option('--json', 'output_json', is_flag=True, help='Output results as JSON')
 @click.pass_context
-def search(ctx, query, top_k, project, has_code, has_tools, output_json):
+def search(ctx, query, top_k, project, has_code, after, before, output_json):
     """Search through indexed conversations."""
     cli_instance = SemanticSearchCLI(ctx.obj['data_dir'])
     
@@ -239,8 +239,25 @@ def search(ctx, query, top_k, project, has_code, has_tools, output_json):
         filters['project_name'] = project
     if has_code:
         filters['has_code'] = True
-    if has_tools:
-        filters['has_tools'] = True
+    
+    # Add date filters
+    if after or before:
+        timestamp_filter = {}
+        if after:
+            try:
+                after_dt = datetime.fromisoformat(f"{after}T00:00:00+00:00")
+                timestamp_filter['gte'] = after_dt.isoformat()
+            except ValueError:
+                click.echo(f"❌ Invalid date format for --after: {after}. Use YYYY-MM-DD format.")
+                sys.exit(1)
+        if before:
+            try:
+                before_dt = datetime.fromisoformat(f"{before}T23:59:59+00:00")
+                timestamp_filter['lte'] = before_dt.isoformat()
+            except ValueError:
+                click.echo(f"❌ Invalid date format for --before: {before}. Use YYYY-MM-DD format.")
+                sys.exit(1)
+        filters['timestamp'] = timestamp_filter
     
     # Search
     try:
@@ -278,8 +295,6 @@ def search(ctx, query, top_k, project, has_code, has_tools, output_json):
                 click.echo(f"   Session: {result['session']} | Time: {result['timestamp']}")
                 if result['has_code']:
                     click.echo("   🔧 Contains code")
-                if result['has_tools']:
-                    click.echo("   🛠️  Contains tools")
                 click.echo()
                 
     except Exception as e:
