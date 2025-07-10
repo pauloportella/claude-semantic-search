@@ -26,7 +26,7 @@ async def list_tools() -> List[Tool]:
     """List available search tools."""
     return [
         Tool(
-            name="semantic_search",
+            name="claude_semantic_search",
             description="Search Claude conversations using semantic similarity",
             inputSchema={
                 "type": "object",
@@ -136,7 +136,7 @@ def get_search_cli(use_gpu: bool = False) -> SemanticSearchCLI:
 @server.call_tool()
 async def call_tool(name: str, arguments: Any) -> List[TextContent]:
     """Execute a tool and return results."""
-    if name == "semantic_search":
+    if name == "claude_semantic_search":
         # Extract search parameters
         query = arguments.get("query")
         top_k = arguments.get("top_k", 20)

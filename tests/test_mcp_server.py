@@ -20,21 +20,21 @@ class TestMCPServer:
         tool_names = [tool.name for tool in tools]
 
         assert len(tools) == 5
-        assert "semantic_search" in tool_names
+        assert "claude_semantic_search" in tool_names
         assert "get_chunk_by_id" in tool_names
         assert "list_projects" in tool_names
         assert "get_stats" in tool_names
         assert "get_status" in tool_names
 
-        # Check semantic_search tool schema
-        search_tool = next(t for t in tools if t.name == "semantic_search")
+        # Check claude_semantic_search tool schema
+        search_tool = next(t for t in tools if t.name == "claude_semantic_search")
         assert search_tool.inputSchema["required"] == ["query"]
         assert "query" in search_tool.inputSchema["properties"]
         assert "top_k" in search_tool.inputSchema["properties"]
         assert "project" in search_tool.inputSchema["properties"]
 
     @pytest.mark.asyncio
-    async def test_semantic_search_basic(self):
+    async def test_claude_semantic_search_basic(self):
         """Test basic semantic search functionality."""
         mock_results = [
             MagicMock(
@@ -55,7 +55,7 @@ class TestMCPServer:
             mock_cli.search_conversations = MagicMock(return_value=mock_results)
             mock_get_cli.return_value = mock_cli
 
-            results = await call_tool("semantic_search", {"query": "Python programming"})
+            results = await call_tool("claude_semantic_search", {"query": "Python programming"})
 
             assert len(results) == 1
             result_text = results[0].text
@@ -65,7 +65,7 @@ class TestMCPServer:
             assert "🔧 Contains code" in result_text
 
     @pytest.mark.asyncio
-    async def test_semantic_search_with_filters(self):
+    async def test_claude_semantic_search_with_filters(self):
         """Test semantic search with various filters."""
         with patch("src.mcp_server.get_search_cli") as mock_get_cli:
             mock_cli = MagicMock()
@@ -74,7 +74,7 @@ class TestMCPServer:
 
             # Test with all filters
             await call_tool(
-                "semantic_search",
+                "claude_semantic_search",
                 {
                     "query": "test query",
                     "top_k": 5,
@@ -104,7 +104,7 @@ class TestMCPServer:
             mock_get_cli.assert_called_with(True)
 
     @pytest.mark.asyncio
-    async def test_semantic_search_related_to(self):
+    async def test_claude_semantic_search_related_to(self):
         """Test semantic search with related_to functionality."""
         with patch("src.mcp_server.get_search_cli") as mock_get_cli:
             mock_cli = MagicMock()
@@ -112,7 +112,7 @@ class TestMCPServer:
             mock_get_cli.return_value = mock_cli
 
             await call_tool(
-                "semantic_search",
+                "claude_semantic_search",
                 {
                     "query": "",
                     "related_to": "chunk_123",
@@ -275,7 +275,7 @@ class TestMCPServer:
             mock_get_cli.return_value = mock_cli
 
             # Test with truncation (default)
-            results = await call_tool("semantic_search", {"query": "test"})
+            results = await call_tool("claude_semantic_search", {"query": "test"})
             result_text = results[0].text
             assert "..." in result_text
             # The truncated content should be around 500 chars
@@ -284,7 +284,7 @@ class TestMCPServer:
 
             # Test without truncation
             results = await call_tool(
-                "semantic_search", {"query": "test", "full_content": True}
+                "claude_semantic_search", {"query": "test", "full_content": True}
             )
             result_text = results[0].text
             assert "xxx" in result_text  # Full content should be there
