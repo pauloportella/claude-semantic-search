@@ -12,7 +12,6 @@ from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
 
 from src.cli import SemanticSearchCLI
-from src.storage import SearchConfig
 
 # Create MCP server instance
 server = Server("claude-search")
@@ -194,12 +193,9 @@ async def call_tool(name: str, arguments: Any) -> List[TextContent]:
         # Get CLI instance with appropriate GPU settings
         cli = get_search_cli(use_gpu)
 
-        # Configure search settings
-        config = SearchConfig(top_k=top_k)
-
         # Perform search
         results = await asyncio.to_thread(
-            cli.search_conversations, query, filters, config
+            cli.search_conversations, query, filters, top_k
         )
 
         # Handle full_content flag

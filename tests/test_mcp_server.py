@@ -7,7 +7,6 @@ import pytest
 from mcp import McpError
 
 from src.mcp_server import call_tool, list_tools
-from src.storage import Chunk
 
 
 class TestMCPServer:
@@ -92,7 +91,7 @@ class TestMCPServer:
             # Verify filters were passed correctly
             call_args = mock_cli.search_conversations.call_args
             filters = call_args[0][1]  # Second positional argument
-            config = call_args[0][2]  # Third positional argument
+            top_k_arg = call_args[0][2]  # Third positional argument
 
             assert filters["project_name"] == "my-project"
             assert filters["has_code"] is True
@@ -100,7 +99,7 @@ class TestMCPServer:
             assert filters["timestamp"]["gte"] == "2025-07-01T00:00:00+00:00"
             assert filters["timestamp"]["lte"] == "2025-07-10T23:59:59+00:00"
             assert filters["session_id"] == "session_456"
-            assert config.top_k == 5
+            assert top_k_arg == 5
             
             # Verify GPU was requested
             mock_get_cli.assert_called_with(True)
