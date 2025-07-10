@@ -783,6 +783,224 @@ class TestCLICommands:
         assert item['uid'] == 'session_chunk'
         assert item['variables']['session'] == 'json_session_456'
         assert item['variables']['project'] == 'session_project'
+    
+    @patch('src.cli.SemanticSearchCLI.search_conversations')
+    def test_search_command_related_to_with_search(self, mock_search_conversations):
+        """Test search command with --related-to performing semantic search in same session."""
+        # Mock storage to simulate getting session from related chunk
+        with patch('src.cli.SemanticSearchCLI') as mock_cli_class:
+            mock_instance = Mock()
+            mock_cli_class.return_value = mock_instance
+            
+            # Mock storage initialization and related chunk data
+            mock_instance.storage.initialize.return_value = None
+            mock_instance.storage._get_chunk_data.return_value = {
+                "session_id": "related_session_123",
+                "project_name": "related_project"
+            }
+            
+            # Mock search results
+            mock_instance.search_conversations.return_value = [
+                {
+                    "chunk_id": "result_chunk",
+                    "similarity": 0.95,
+                    "text": "Related search result",
+                    "project": "related_project",
+                    "session": "related_session_123",
+                    "timestamp": "2025-06-15T12:00:00Z",
+                    "has_code": False,
+                }
+            ]
+            
+            result = self.runner.invoke(cli, [
+                '--data-dir', self.temp_dir,
+                'search', 'test query',
+                '--related-to', 'ref_chunk_123'
+            ])
+            
+            assert result.exit_code == 0
+            assert "Found 1 results" in result.output
+            
+            # Verify storage was called to get reference chunk data
+            mock_instance.storage._get_chunk_data.assert_called_with('ref_chunk_123')
+            
+            # Verify search was called with session filter
+            mock_instance.search_conversations.assert_called_once()
+            call_args = mock_instance.search_conversations.call_args
+            filters = call_args[0][1]  # Second argument is filters
+            assert 'session_id' in filters
+            assert filters['session_id'] == 'related_session_123'
+    
+    @patch('src.cli.SemanticSearchCLI')
+    def test_search_command_related_to_same_session(self, mock_cli_class):
+        """Test search command with --related-to --same-session."""
+        mock_instance = Mock()
+        mock_cli_class.return_value = mock_instance
+        
+        # Mock storage methods
+        mock_instance.storage.initialize.return_value = None
+        mock_instance.storage._get_chunk_data.side_effect = [
+            # First call for reference chunk
+            {"session_id": "session_456", "project_name": "test_project"},
+            # Subsequent calls for related chunks
+            {"session_id": "session_456", "project_name": "test_project", "timestamp": "2025-06-15T12:00:00Z", "has_code": False},
+            {"session_id": "session_456", "project_name": "test_project", "timestamp": "2025-06-15T12:05:00Z", "has_code": True}
+        ]
+        
+        # Mock chunks from session (excluding reference chunk)
+        mock_chunk_1 = Mock()
+        mock_chunk_1.id = "related_chunk_1"
+        mock_chunk_1.text = "First related chunk"
+        
+        mock_chunk_2 = Mock()
+        mock_chunk_2.id = "related_chunk_2"
+        mock_chunk_2.text = "Second related chunk"
+        
+        mock_ref_chunk = Mock()
+        mock_ref_chunk.id = "ref_chunk_456"
+        mock_ref_chunk.text = "Reference chunk"
+        
+        mock_instance.storage.get_chunks_by_session.return_value = [
+            mock_ref_chunk,  # This should be excluded
+            mock_chunk_1,
+            mock_chunk_2
+        ]
+        
+        result = self.runner.invoke(cli, [
+            '--data-dir', self.temp_dir,
+            'search', '',
+            '--related-to', 'ref_chunk_456',
+            '--same-session'
+        ])
+        
+        assert result.exit_code == 0
+        assert "🔗 Found 2 related chunks to ref_chunk_456" in result.output
+        assert "session_456" in result.output
+        assert "[Related]" in result.output
+        assert "First related chunk" in result.output
+        assert "Second related chunk" in result.output
+        assert "Reference chunk" not in result.output  # Should be excluded
+        
+        # Verify storage methods were called correctly
+        mock_instance.storage.get_chunks_by_session.assert_called_once_with('session_456')
+    
+    @patch('src.cli.SemanticSearchCLI')
+    def test_search_command_related_to_same_session_json(self, mock_cli_class):
+        """Test search command with --related-to --same-session JSON output."""
+        mock_instance = Mock()
+        mock_cli_class.return_value = mock_instance
+        
+        # Mock storage methods
+        mock_instance.storage.initialize.return_value = None
+        mock_instance.storage._get_chunk_data.side_effect = [
+            {"session_id": "json_session", "project_name": "json_project"},
+            {"session_id": "json_session", "project_name": "json_project", "timestamp": "2025-06-15T12:00:00Z", "has_code": False}
+        ]
+        
+        # Mock related chunk
+        mock_chunk = Mock()
+        mock_chunk.id = "json_related_chunk"
+        mock_chunk.text = "JSON related content"
+        
+        mock_instance.storage.get_chunks_by_session.return_value = [mock_chunk]
+        
+        result = self.runner.invoke(cli, [
+            '--data-dir', self.temp_dir,
+            'search', '',
+            '--related-to', 'json_ref_chunk',
+            '--same-session',
+            '--json'
+        ])
+        
+        assert result.exit_code == 0
+        
+        # Parse JSON output
+        import json
+        output_data = json.loads(result.output.strip())
+        
+        assert 'items' in output_data
+        assert len(output_data['items']) == 1
+        
+        item = output_data['items'][0]
+        assert item['uid'] == 'json_related_chunk'
+        assert item['text'] == 'JSON related content'
+        assert "Related to json_ref_chunk" in item['subtitle']
+        assert item['variables']['session'] == 'json_session'
+    
+    @patch('src.cli.SemanticSearchCLI')
+    def test_search_command_related_to_chunk_not_found(self, mock_cli_class):
+        """Test search command with --related-to for non-existent chunk."""
+        mock_instance = Mock()
+        mock_cli_class.return_value = mock_instance
+        
+        # Mock storage methods
+        mock_instance.storage.initialize.return_value = None
+        mock_instance.storage._get_chunk_data.return_value = None  # Chunk not found
+        
+        result = self.runner.invoke(cli, [
+            '--data-dir', self.temp_dir,
+            'search', 'test query',
+            '--related-to', 'nonexistent_chunk'
+        ])
+        
+        assert result.exit_code == 1
+        assert "❌ Reference chunk not found: nonexistent_chunk" in result.output
+    
+    @patch('src.cli.SemanticSearchCLI')
+    def test_search_command_related_to_no_session(self, mock_cli_class):
+        """Test search command with --related-to for chunk without session ID."""
+        mock_instance = Mock()
+        mock_cli_class.return_value = mock_instance
+        
+        # Mock storage methods
+        mock_instance.storage.initialize.return_value = None
+        mock_instance.storage._get_chunk_data.return_value = {
+            "project_name": "test_project"
+            # No session_id
+        }
+        
+        result = self.runner.invoke(cli, [
+            '--data-dir', self.temp_dir,
+            'search', 'test query',
+            '--related-to', 'sessionless_chunk'
+        ])
+        
+        assert result.exit_code == 1
+        assert "❌ Reference chunk has no session ID: sessionless_chunk" in result.output
+    
+    @patch('src.cli.SemanticSearchCLI')
+    def test_search_command_related_to_with_full_content(self, mock_cli_class):
+        """Test search command with --related-to --same-session --full-content."""
+        mock_instance = Mock()
+        mock_cli_class.return_value = mock_instance
+        
+        long_text = "This is a very long related chunk content " * 10
+        
+        # Mock storage methods
+        mock_instance.storage.initialize.return_value = None
+        mock_instance.storage._get_chunk_data.side_effect = [
+            {"session_id": "full_session", "project_name": "full_project"},
+            {"session_id": "full_session", "project_name": "full_project", "timestamp": "2025-06-15T12:00:00Z", "has_code": False}
+        ]
+        
+        # Mock related chunk with long content
+        mock_chunk = Mock()
+        mock_chunk.id = "full_content_chunk"
+        mock_chunk.text = long_text
+        
+        mock_instance.storage.get_chunks_by_session.return_value = [mock_chunk]
+        
+        result = self.runner.invoke(cli, [
+            '--data-dir', self.temp_dir,
+            'search', '',
+            '--related-to', 'full_ref_chunk',
+            '--same-session',
+            '--full-content'
+        ])
+        
+        assert result.exit_code == 0
+        assert long_text in result.output  # Full content should be displayed
+        assert "..." not in result.output.split(long_text)[1].split("\n")[0]  # No truncation
 
 
 class TestCLIIntegration:

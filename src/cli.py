@@ -228,11 +228,13 @@ def index(ctx, claude_dir, force):
 @click.option('--after', help='Filter for chunks after date (YYYY-MM-DD)')
 @click.option('--before', help='Filter for chunks before date (YYYY-MM-DD)')
 @click.option('--session', help='Filter by session ID')
+@click.option('--related-to', help='Find chunks related to given chunk ID (same session)')
+@click.option('--same-session', is_flag=True, help='Include chunks from same session as --related-to')
 @click.option('--full-content', is_flag=True, help='Show full content instead of truncated')
 @click.option('--chunk-id', help='Get specific chunk by ID (ignores query and other filters)')
 @click.option('--json', 'output_json', is_flag=True, help='Output results as JSON')
 @click.pass_context
-def search(ctx, query, top_k, project, has_code, after, before, session, full_content, chunk_id, output_json):
+def search(ctx, query, top_k, project, has_code, after, before, session, related_to, same_session, full_content, chunk_id, output_json):
     """Search through indexed conversations."""
     cli_instance = SemanticSearchCLI(ctx.obj['data_dir'])
     
@@ -278,6 +280,95 @@ def search(ctx, query, top_k, project, has_code, after, before, session, full_co
             return
         except Exception as e:
             click.echo(f"❌ Failed to retrieve chunk: {str(e)}")
+            sys.exit(1)
+    
+    # Handle related chunks
+    if related_to:
+        try:
+            cli_instance.storage.initialize()
+            
+            # Get the reference chunk to find its session
+            ref_chunk_data = cli_instance.storage._get_chunk_data(related_to)
+            if not ref_chunk_data:
+                click.echo(f"❌ Reference chunk not found: {related_to}")
+                sys.exit(1)
+            
+            ref_session_id = ref_chunk_data.get('session_id')
+            if not ref_session_id:
+                click.echo(f"❌ Reference chunk has no session ID: {related_to}")
+                sys.exit(1)
+            
+            # If --same-session flag is used, override query and get all chunks from session
+            if same_session:
+                related_chunks = cli_instance.storage.get_chunks_by_session(ref_session_id)
+                
+                # Convert to result format for display
+                results = []
+                for chunk in related_chunks:
+                    # Skip the reference chunk itself
+                    if chunk.id == related_to:
+                        continue
+                        
+                    chunk_data = cli_instance.storage._get_chunk_data(chunk.id)
+                    results.append({
+                        "chunk_id": chunk.id,
+                        "similarity": 1.0,  # Perfect similarity for same session
+                        "text": chunk.text,
+                        "project": chunk_data.get("project_name", "unknown") if chunk_data else "unknown",
+                        "session": chunk_data.get("session_id", "unknown") if chunk_data else "unknown",
+                        "timestamp": chunk_data.get("timestamp", "unknown") if chunk_data else "unknown",
+                        "has_code": chunk_data.get("has_code", False) if chunk_data else False,
+                    })
+                
+                # Sort by timestamp for chronological order
+                results.sort(key=lambda x: x["timestamp"])
+                
+                # Display results
+                if output_json:
+                    click.echo(json.dumps({
+                        "items": [
+                            {
+                                "uid": result["chunk_id"],
+                                "title": result["text"][:100] + "..." if len(result["text"]) > 100 else result["text"],
+                                "subtitle": f"Related to {related_to} | Same session",
+                                "arg": result["chunk_id"],
+                                "text": result["text"],
+                                "quicklookurl": "",
+                                "variables": {
+                                    "similarity": result["similarity"],
+                                    "project": result["project"],
+                                    "session": result["session"],
+                                    "timestamp": result["timestamp"]
+                                }
+                            }
+                            for result in results[:top_k]
+                        ]
+                    }, indent=2))
+                else:
+                    click.echo(f"🔗 Found {len(results)} related chunks to {related_to} (same session: {ref_session_id})")
+                    click.echo()
+                    
+                    for i, result in enumerate(results[:top_k], 1):
+                        click.echo(f"{i}. [Related] {result['project']}")
+                        
+                        # Show full content or truncated based on flag
+                        if full_content:
+                            click.echo(f"   {result['text']}")
+                        else:
+                            click.echo(f"   {result['text'][:200]}...")
+                        
+                        click.echo(f"   Session: {result['session']} | Time: {result['timestamp']}")
+                        if result['has_code']:
+                            click.echo("   🔧 Contains code")
+                        click.echo()
+                
+                return
+            else:
+                # For --related-to without --same-session, add session filter to regular search
+                session = ref_session_id
+                
+        except Exception as e:
+            click.echo(f"❌ Failed to find related chunks: {str(e)}")
             sys.exit(1)
     
     # Build filters
