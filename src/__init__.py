@@ -7,11 +7,12 @@ stored in ~/.claude/projects using sentence transformers and FAISS.
 
 __version__ = "0.1.0"
 
+from .chunker import Chunk, ChunkingConfig, ConversationChunker
+from .embeddings import EmbeddingConfig, EmbeddingGenerator, EmbeddingStats
+
 # Package imports
-from .parser import JSONLParser, Conversation, Message
-from .chunker import ConversationChunker, ChunkingConfig, Chunk
-from .embeddings import EmbeddingGenerator, EmbeddingConfig, EmbeddingStats
-from .storage import HybridStorage, StorageConfig, SearchConfig, SearchResult
+from .parser import Conversation, JSONLParser, Message
+from .storage import HybridStorage, SearchConfig, SearchResult, StorageConfig
 
 __all__ = [
     "JSONLParser",
