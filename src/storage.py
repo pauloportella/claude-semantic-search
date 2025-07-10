@@ -588,6 +588,99 @@ class HybridStorage:
         
         return stats
     
+    def update_file_info(self, file_path: str, chunk_count: int) -> None:
+        """Update file information after indexing."""
+        import os
+        
+        # Get file modification time if file exists
+        try:
+            last_modified = datetime.fromtimestamp(os.path.getmtime(file_path))
+        except OSError:
+            # If file doesn't exist (e.g., in tests), use current time
+            last_modified = datetime.now()
+        
+        cursor = self.db.cursor()
+        cursor.execute("""
+            INSERT OR REPLACE INTO files (path, last_modified, last_indexed, chunk_count)
+            VALUES (?, ?, ?, ?)
+        """, (file_path, last_modified, datetime.now(), chunk_count))
+        self.db.commit()
+    
+    def is_file_modified(self, file_path: str) -> bool:
+        """Check if file has been modified since last indexing."""
+        import os
+        
+        # Get file's current modification time
+        try:
+            current_modified = datetime.fromtimestamp(os.path.getmtime(file_path))
+        except OSError:
+            return True  # If file doesn't exist or can't be accessed, consider it modified
+        
+        # Check database for last indexed time
+        cursor = self.db.cursor()
+        result = cursor.execute("""
+            SELECT last_modified, last_indexed FROM files WHERE path = ?
+        """, (file_path,)).fetchone()
+        
+        if not result:
+            # File never indexed
+            return True
+        
+        last_modified_db = datetime.fromisoformat(result['last_modified']) if result['last_modified'] else None
+        
+        # File is modified if current modification time is newer than what we have in DB
+        return last_modified_db is None or current_modified > last_modified_db
+    
+    def remove_chunks_for_file(self, file_path: str) -> int:
+        """Remove all chunks associated with a file."""
+        cursor = self.db.cursor()
+        
+        # Get chunk IDs to remove from FAISS
+        chunks_to_remove = cursor.execute("""
+            SELECT id, faiss_id FROM chunks WHERE file_path = ?
+        """, (file_path,)).fetchall()
+        
+        if not chunks_to_remove:
+            return 0
+        
+        # Remove from SQLite
+        cursor.execute("DELETE FROM chunks WHERE file_path = ?", (file_path,))
+        self.db.commit()
+        
+        # Remove from id mappings
+        for chunk in chunks_to_remove:
+            chunk_id = chunk['id']
+            self.chunk_id_to_faiss_id.pop(chunk_id, None)
+            if chunk['faiss_id'] is not None:
+                self.faiss_id_to_chunk_id.pop(chunk['faiss_id'], None)
+        
+        # Note: FAISS doesn't support deletion, so we'll need to rebuild the index
+        # This is handled by periodic index optimization
+        
+        return len(chunks_to_remove)
+    
+    def clear_all_data(self) -> None:
+        """Clear all data from storage (for --force option)."""
+        # Clear FAISS index
+        self.faiss_index = self._create_cpu_index()
+        
+        # Clear SQLite tables
+        cursor = self.db.cursor()
+        cursor.execute("DELETE FROM chunks")
+        cursor.execute("DELETE FROM files")
+        self.db.commit()
+        
+        # Clear mappings
+        self.chunk_id_to_faiss_id.clear()
+        self.faiss_id_to_chunk_id.clear()
+        self.total_chunks = 0
+        
+        # Save empty index
+        if self.config.auto_save:
+            self.save_index()
+        
+        self.logger.info("Cleared all data from storage")
+    
     def save_index(self) -> None:
         """Save FAISS index to disk."""
         if self._is_gpu_index:

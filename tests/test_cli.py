@@ -99,6 +99,10 @@ class TestSemanticSearchCLI:
         # Mock storage and embedder
         self.cli_instance.storage = Mock()
         self.cli_instance.storage.initialize = Mock()
+        self.cli_instance.storage.is_file_modified = Mock(return_value=True)
+        self.cli_instance.storage.remove_chunks_for_file = Mock(return_value=0)
+        self.cli_instance.storage.update_file_info = Mock()
+        self.cli_instance.storage.add_chunks = Mock()
         self.cli_instance.embedder = Mock()
         self.cli_instance.embedder.is_model_loaded = True
         
@@ -121,6 +125,10 @@ class TestSemanticSearchCLI:
         # Mock storage
         self.cli_instance.storage = Mock()
         self.cli_instance.storage.initialize = Mock()
+        self.cli_instance.storage.is_file_modified = Mock(return_value=True)
+        self.cli_instance.storage.remove_chunks_for_file = Mock(return_value=0)
+        self.cli_instance.storage.update_file_info = Mock()
+        self.cli_instance.storage.add_chunks = Mock()
         self.cli_instance.embedder = Mock()
         self.cli_instance.embedder.is_model_loaded = True
         

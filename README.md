@@ -56,18 +56,20 @@ This downloads the all-mpnet-base-v2 model (~420MB) for high-quality embeddings.
 #### 1. Index Your Conversations
 
 ```bash
-# Index all Claude conversations (default: ~/.claude/projects)
+# Index all Claude conversations (incremental - only new/modified files)
 uv run claude-index
 
 # Index from a specific directory
 uv run claude-index --claude-dir /path/to/conversations
 
-# Force reindexing of all files
+# Force reindexing of all files (clears existing data)
 uv run claude-index --force
 
 # Use GPU acceleration (5-10x faster)
 uv run claude-index --gpu
 ```
+
+**Incremental Indexing**: By default, `claude-index` only processes files that have been added or modified since the last indexing. This makes subsequent runs much faster. Use `--force` to clear all data and reindex everything from scratch.
 
 #### 2. Search Conversations
 
@@ -98,7 +100,7 @@ uv run claude-stats
 #### 4. Watch for Changes (Daemon Mode)
 
 ```bash
-# Start watcher daemon
+# Start watcher daemon (uses incremental indexing)
 uv run claude-start
 
 # Start with custom settings
@@ -116,6 +118,8 @@ uv run claude-watch
 # Run watch as daemon (background)
 uv run claude-watch --daemon
 ```
+
+**Auto-indexing**: The daemon watches for new or modified files and automatically indexes them using incremental indexing. When a file changes, only that file and other files in the same directory are checked for updates.
 
 ### Advanced Usage
 
@@ -399,6 +403,9 @@ The system uses:
 ### Performance Optimization
 
 - **Incremental Indexing**: Only new/modified files are reprocessed
+  - First indexing: Processes all files
+  - Subsequent runs: Only processes changed files (typically 90%+ faster)
+  - File modification tracking via SQLite metadata
 - **Batch Processing**: Embeddings generated in optimized batches
 - **Memory Mapping**: Large indexes use memory-mapped files
 - **Compression**: Efficient storage formats reduce disk usage

@@ -97,8 +97,11 @@ class ConversationFileHandler(FileSystemEventHandler):
                     
                     logger.info(f"Incremental indexing complete:")
                     logger.info(f"  Files processed: {stats['files_processed']}")
+                    logger.info(f"  Files unchanged: {stats.get('files_unchanged', 0)}")
                     logger.info(f"  Files skipped: {stats['files_skipped']}")
                     logger.info(f"  Chunks indexed: {stats['chunks_indexed']}")
+                    if stats.get('chunks_removed', 0) > 0:
+                        logger.info(f"  Chunks removed: {stats['chunks_removed']}")
                     logger.info(f"  Duration: {stats['duration']:.1f}s")
                     
                     if stats['errors']:

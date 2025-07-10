@@ -88,6 +88,12 @@ class SemanticSearchCLI:
         # Initialize storage
         self.storage.initialize()
         
+        # Handle --force option
+        if force:
+            click.echo("🗑️  Force flag detected - clearing all existing data...")
+            self.storage.clear_all_data()
+            click.echo("✅ All data cleared")
+        
         # Load embedding model
         if not self.embedder.is_model_loaded:
             click.echo("📥 Loading embedding model...")
@@ -97,8 +103,10 @@ class SemanticSearchCLI:
         stats = {
             "files_processed": 0,
             "files_skipped": 0,
+            "files_unchanged": 0,
             "chunks_created": 0,
             "chunks_indexed": 0,
+            "chunks_removed": 0,
             "errors": [],
             "start_time": time.time()
         }
@@ -109,7 +117,20 @@ class SemanticSearchCLI:
         with tqdm(files, desc="Processing files", unit="file") as pbar:
             for file_path in pbar:
                 try:
+                    pbar.set_postfix_str(f"Checking {file_path.name}")
+                    
+                    # Check if file needs indexing (unless --force)
+                    if not force and not self.storage.is_file_modified(str(file_path)):
+                        stats["files_unchanged"] += 1
+                        pbar.set_postfix_str(f"Skipped (unchanged): {file_path.name}")
+                        continue
+                    
                     pbar.set_postfix_str(f"Processing {file_path.name}")
+                    
+                    # Remove old chunks for this file (if any)
+                    removed_count = self.storage.remove_chunks_for_file(str(file_path))
+                    if removed_count > 0:
+                        stats["chunks_removed"] += removed_count
                     
                     # Parse conversation
                     conversation = self.parser.parse_file(str(file_path))
@@ -130,6 +151,10 @@ class SemanticSearchCLI:
                     
                     # Store in hybrid storage
                     self.storage.add_chunks(chunks)
+                    
+                    # Update file info
+                    self.storage.update_file_info(str(file_path), len(chunks))
+                    
                     stats["chunks_indexed"] += len(chunks)
                     stats["files_processed"] += 1
                     
@@ -150,6 +175,11 @@ class SemanticSearchCLI:
                     try:
                         pbar.set_postfix_str(f"Retrying {file_path.name}")
                         
+                        # Remove old chunks for this file (if any)
+                        removed_count = self.storage.remove_chunks_for_file(str(file_path))
+                        if removed_count > 0:
+                            stats["chunks_removed"] += removed_count
+                        
                         # Parse conversation
                         conversation = self.parser.parse_file(str(file_path))
                         if not conversation:
@@ -166,6 +196,9 @@ class SemanticSearchCLI:
                         
                         # Store in hybrid storage
                         self.storage.add_chunks(chunks)
+                        
+                        # Update file info
+                        self.storage.update_file_info(str(file_path), len(chunks))
                         
                         # Update stats
                         stats["chunks_created"] += len(chunks)
@@ -261,9 +294,12 @@ def index(ctx, claude_dir, force, gpu):
     click.echo(f"\n🎉 Indexing complete!")
     click.echo(f"📊 Statistics:")
     click.echo(f"   • Files processed: {stats['files_processed']}")
+    click.echo(f"   • Files unchanged: {stats.get('files_unchanged', 0)}")
     click.echo(f"   • Files skipped: {stats['files_skipped']}")
     click.echo(f"   • Chunks created: {stats['chunks_created']}")
     click.echo(f"   • Chunks indexed: {stats['chunks_indexed']}")
+    if stats.get('chunks_removed', 0) > 0:
+        click.echo(f"   • Chunks removed: {stats['chunks_removed']}")
     click.echo(f"   • Duration: {stats['duration']:.1f}s")
     
     if stats['errors']:
