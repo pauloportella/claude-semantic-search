@@ -93,9 +93,10 @@ class EmbeddingGenerator:
             if self.config.use_gpu and self.config.auto_batch_size and self._gpu_capability:
                 if self._gpu_capability.gpu_memory_free:
                     memory_gb = self._gpu_capability.gpu_memory_free / (1024**3)
-                    optimal_batch = calculate_optimal_batch_size(memory_gb)
+                    backend = "mps" if "mps" in target_device else "cuda"
+                    optimal_batch = calculate_optimal_batch_size(memory_gb, backend=backend)
                     self.config.batch_size = optimal_batch
-                    self.logger.info(f"Auto-adjusted batch size for GPU: {optimal_batch}")
+                    self.logger.info(f"Auto-adjusted batch size for GPU ({backend}): {optimal_batch}")
             
             # Get embedding dimension
             self._embedding_dim = self.model.get_sentence_embedding_dimension()
@@ -113,7 +114,16 @@ class EmbeddingGenerator:
     
     def _determine_target_device(self) -> str:
         """Determine the target device for the model."""
-        if self.config.use_gpu and self._gpu_capability and self._gpu_capability.can_use_gpu:
+        # If use_gpu is False, always use CPU
+        if not self.config.use_gpu:
+            return "cpu"
+            
+        # If device is explicitly set, use it
+        if self.config.device != "auto":
+            return self.config.device
+            
+        # If GPU is requested and available, use it
+        if self._gpu_capability and self._gpu_capability.can_use_gpu:
             # Check what backend is available
             if torch.cuda.is_available():
                 return "cuda"
@@ -121,16 +131,9 @@ class EmbeddingGenerator:
                 return "mps"
             else:
                 return "cpu"
-        elif self.config.device != "auto":
-            return self.config.device
         else:
-            # Auto-detect best device
-            if torch.cuda.is_available():
-                return "cuda"
-            elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
-                return "mps"
-            else:
-                return "cpu"
+            # No GPU available, use CPU
+            return "cpu"
     
     def generate_embeddings(self, chunks: List[Chunk]) -> List[np.ndarray]:
         """Generate embeddings for a list of chunks."""

@@ -156,7 +156,7 @@ def estimate_gpu_memory_requirements(num_chunks: int, embedding_dim: int = 768) 
     }
 
 
-def calculate_optimal_batch_size(available_memory_gb: float, embedding_dim: int = 768) -> int:
+def calculate_optimal_batch_size(available_memory_gb: float, embedding_dim: int = 768, backend: str = "cuda") -> int:
     """Calculate optimal batch size based on available GPU memory."""
     # Reserve memory for model and overhead (1GB)
     working_memory = available_memory_gb - 1.0
@@ -171,7 +171,11 @@ def calculate_optimal_batch_size(available_memory_gb: float, embedding_dim: int 
     batch_size = int(working_memory / memory_per_item)
     
     # Clamp to reasonable values
-    batch_size = max(8, min(batch_size, 256))
+    # MPS has different performance characteristics - cap at 64 for optimal performance
+    if backend == "mps":
+        batch_size = max(8, min(batch_size, 64))
+    else:
+        batch_size = max(8, min(batch_size, 256))
     
     return batch_size
 
