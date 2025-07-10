@@ -404,7 +404,10 @@ semantic-search/
 │   ├── chunker.py      # Smart chunking strategies
 │   ├── embeddings.py   # Embedding generation
 │   ├── storage.py      # Hybrid FAISS + SQLite storage
-│   └── cli.py          # Command-line interface
+│   ├── cli.py          # Command-line interface
+│   ├── mcp_server.py   # MCP server for Claude/Cursor integration
+│   ├── watcher.py      # File system watcher for auto-indexing
+│   └── gpu_utils.py    # GPU detection and configuration
 ├── tests/              # Comprehensive test suite
 ├── scripts/            # Utility scripts
 └── data/               # Models and index storage
@@ -441,11 +444,12 @@ uv run flake8 src/
 
 ## Configuration
 
-### Environment Variables
+### Command-Line Options
 
-- `CLAUDE_PROJECTS_DIR`: Override default Claude projects directory
-- `SEMANTIC_SEARCH_DATA_DIR`: Override default data directory
-- `EMBEDDING_MODEL`: Override default embedding model
+- `--claude-dir`: Specify Claude projects directory (default: `~/.claude/projects`)
+- `--data-dir`: Specify data directory for indexes and models
+- `--force`: Force reindexing (clears existing data)
+- `--gpu`: Enable GPU acceleration
 
 ### Storage Configuration
 
