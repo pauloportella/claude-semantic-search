@@ -2,11 +2,14 @@
 
 A powerful semantic search system for Claude conversations that enables fast, intelligent retrieval through natural language queries. Access your Claude Code sessions from anywhere - Claude Code itself, CLI, Claude Desktop, Cursor IDE, and Alfred (in development)!
 
-<div align="center">
+<figure style="text-align: center;">
   <img width="800" alt="Screenshot of the Claude Semantic Search interface showing search results for a query" src="https://github.com/user-attachments/assets/b5d35184-27b7-44c3-b4aa-9dc7c6e21af6" />
-  <br/><br/>
+  <figcaption>Screenshot of the Claude Semantic Search interface showing search results for a query</figcaption>
+</figure>
+<figure style="text-align: center;">
   <img width="800" alt="Screenshot of the settings page for configuring Claude Semantic Search" src="https://github.com/user-attachments/assets/fb9c87f1-0637-481f-82c9-45842a3a6b19" />
-</div>
+  <figcaption>Screenshot of the settings page for configuring Claude Semantic Search</figcaption>
+</figure>
 
 ## Why This Project?
 
