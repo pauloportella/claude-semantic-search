@@ -78,8 +78,12 @@ async def list_tools() -> List[Tool]:
                         "description": "Use GPU acceleration for faster search",
                         "default": False,
                     },
+                    "chunk_id": {
+                        "type": "string",
+                        "description": "Get specific chunk by ID (ignores query and other filters)",
+                    },
                 },
-                "required": ["query"],
+                "required": [],
             },
         ),
         Tool(
@@ -137,8 +141,29 @@ def get_search_cli(use_gpu: bool = False) -> SemanticSearchCLI:
 async def call_tool(name: str, arguments: Any) -> List[TextContent]:
     """Execute a tool and return results."""
     if name == "claude_semantic_search":
-        # Extract search parameters
-        query = arguments.get("query")
+        # Check if this is a chunk_id lookup
+        chunk_id = arguments.get("chunk_id")
+        if chunk_id:
+            # Handle chunk_id lookup (like --chunk-id in CLI)
+            cli = get_search_cli()
+            chunk = await asyncio.to_thread(cli.storage.get_chunk_by_id, chunk_id)
+            
+            if chunk:
+                return [
+                    TextContent(
+                        type="text",
+                        text=f"**Chunk ID**: {chunk_id}\n"
+                        f"**Project**: {chunk.metadata.get('project', 'Unknown')}\n"
+                        f"**Time**: {chunk.metadata.get('timestamp', 'Unknown')}\n\n"
+                        f"{chunk.text}",
+                    )
+                ]
+            else:
+                raise McpError(ErrorData(code=-32602, message=f"Chunk not found: {chunk_id}"))
+        
+        # Regular search
+        query = arguments.get("query", "")
+            
         top_k = arguments.get("top_k", 20)
         use_gpu = arguments.get("use_gpu", False)
         filters = {}

@@ -28,8 +28,9 @@ class TestMCPServer:
 
         # Check claude_semantic_search tool schema
         search_tool = next(t for t in tools if t.name == "claude_semantic_search")
-        assert search_tool.inputSchema["required"] == ["query"]
+        assert search_tool.inputSchema["required"] == []  # Both query and chunk_id are optional
         assert "query" in search_tool.inputSchema["properties"]
+        assert "chunk_id" in search_tool.inputSchema["properties"]
         assert "top_k" in search_tool.inputSchema["properties"]
         assert "project" in search_tool.inputSchema["properties"]
 
@@ -290,3 +291,43 @@ class TestMCPServer:
             result_text = results[0].text
             assert "xxx" in result_text  # Full content should be there
             assert "..." not in result_text.split("---")[0]  # No truncation in content
+
+    @pytest.mark.asyncio
+    async def test_claude_semantic_search_with_chunk_id(self):
+        """Test semantic search with chunk_id parameter (like --chunk-id in CLI)."""
+        mock_chunk = MagicMock()
+        mock_chunk.text = "This is the specific chunk content."
+        mock_chunk.metadata = {
+            "project": "test-project",
+            "timestamp": "2025-07-10T10:00:00Z",
+            "session_id": "session_123",
+            "has_code": False,
+        }
+
+        with patch("src.mcp_server.get_search_cli") as mock_get_cli:
+            mock_cli = MagicMock()
+            mock_cli.storage.get_chunk_by_id = MagicMock(return_value=mock_chunk)
+            mock_get_cli.return_value = mock_cli
+
+            # Test with chunk_id (no query needed)
+            results = await call_tool("claude_semantic_search", {"chunk_id": "chunk_456"})
+            assert len(results) == 1
+            result_text = results[0].text
+            assert "chunk_456" in result_text
+            assert "This is the specific chunk content." in result_text
+            assert "test-project" in result_text
+
+            # Verify search_conversations was NOT called
+            mock_cli.search_conversations.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_claude_semantic_search_chunk_id_not_found(self):
+        """Test semantic search with non-existent chunk_id."""
+        with patch("src.mcp_server.get_search_cli") as mock_get_cli:
+            mock_cli = MagicMock()
+            mock_cli.storage.get_chunk_by_id = MagicMock(return_value=None)
+            mock_get_cli.return_value = mock_cli
+
+            with pytest.raises(McpError) as exc_info:
+                await call_tool("claude_semantic_search", {"chunk_id": "nonexistent"})
+            assert "Chunk not found: nonexistent" in str(exc_info.value)
