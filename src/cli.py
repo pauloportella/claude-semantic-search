@@ -65,14 +65,14 @@ class SemanticSearchCLI:
 
     def scan_claude_projects(self, base_path: str = "~/.claude/projects") -> List[Path]:
         """Scan for Claude conversation files."""
-        base_path = Path(base_path).expanduser()
+        base_path_obj = Path(base_path).expanduser()
 
-        if not base_path.exists():
-            click.echo(f"❌ Claude projects directory not found: {base_path}")
+        if not base_path_obj.exists():
+            click.echo(f"❌ Claude projects directory not found: {base_path_obj}")
             sys.exit(1)
 
         # Find all JSONL files
-        jsonl_files = list(base_path.rglob("*.jsonl"))
+        jsonl_files = list(base_path_obj.rglob("*.jsonl"))
 
         if not jsonl_files:
             click.echo("❌ No JSONL files found in Claude projects directory")
@@ -258,10 +258,14 @@ class SemanticSearchCLI:
                     "similarity": float(result.similarity),
                     "text": result.text,
                     "metadata": result.metadata,
-                    "project": result.metadata.get("project_name", "unknown"),
-                    "session": result.metadata.get("session_id", "unknown"),
-                    "timestamp": result.metadata.get("timestamp", "unknown"),
-                    "has_code": result.metadata.get("has_code", False),
+                    "project": (result.metadata.get("project_name", "unknown") 
+                               if result.metadata is not None else "unknown"),
+                    "session": (result.metadata.get("session_id", "unknown") 
+                               if result.metadata is not None else "unknown"),
+                    "timestamp": (result.metadata.get("timestamp", "unknown") 
+                                 if result.metadata is not None else "unknown"),
+                    "has_code": (result.metadata.get("has_code", False) 
+                                if result.metadata is not None else False),
                 }
             )
 
@@ -415,16 +419,17 @@ def search(
                 )
             else:
                 click.echo(f"📄 Chunk: {chunk_id}")
-                click.echo(
-                    f"   Project: {chunk_data.get('project_name', 'unknown') if chunk_data else 'unknown'}"
-                )
-                click.echo(
-                    f"   Session: {chunk_data.get('session_id', 'unknown') if chunk_data else 'unknown'}"
-                )
-                click.echo(
-                    f"   Time: {chunk_data.get('timestamp', 'unknown') if chunk_data else 'unknown'}"
-                )
-                if chunk_data and chunk_data.get("has_code"):
+                project_name = (chunk_data.get('project_name', 'unknown') 
+                               if chunk_data is not None else 'unknown')
+                session_id = (chunk_data.get('session_id', 'unknown') 
+                            if chunk_data is not None else 'unknown')
+                timestamp = (chunk_data.get('timestamp', 'unknown') 
+                           if chunk_data is not None else 'unknown')
+                
+                click.echo(f"   Project: {project_name}")
+                click.echo(f"   Session: {session_id}")
+                click.echo(f"   Time: {timestamp}")
+                if chunk_data is not None and chunk_data.get("has_code"):
                     click.echo("   🔧 Contains code")
                 click.echo()
                 click.echo(chunk.text)
@@ -457,7 +462,7 @@ def search(
                 )
 
                 # Convert to result format for display
-                results = []
+                results: List[Dict[str, Any]] = []
                 for chunk in related_chunks:
                     # Skip the reference chunk itself
                     if chunk.id == related_to:
@@ -471,17 +476,17 @@ def search(
                             "text": chunk.text,
                             "project": (
                                 chunk_data.get("project_name", "unknown")
-                                if chunk_data
+                                if chunk_data is not None
                                 else "unknown"
                             ),
                             "session": (
                                 chunk_data.get("session_id", "unknown")
-                                if chunk_data
+                                if chunk_data is not None
                                 else "unknown"
                             ),
                             "timestamp": (
                                 chunk_data.get("timestamp", "unknown")
-                                if chunk_data
+                                if chunk_data is not None
                                 else "unknown"
                             ),
                             "has_code": (
@@ -684,9 +689,11 @@ def stats(ctx: click.Context, gpu: bool) -> None:
             click.echo(f"   • GPU status: {gpu_info.get('status_message', 'Unknown')}")
             if gpu_info.get("gpu_names"):
                 click.echo(f"   • GPU devices: {', '.join(gpu_info['gpu_names'])}")
-            if gpu_info.get("gpu_memory_total_gb"):
+            if gpu_info.get("gpu_memory_total_gb") is not None:
+                free_gb = gpu_info.get('gpu_memory_free_gb', 0.0)
+                total_gb = gpu_info.get('gpu_memory_total_gb', 0.0)
                 click.echo(
-                    f"   • GPU memory: {gpu_info['gpu_memory_free_gb']:.1f}GB free / {gpu_info['gpu_memory_total_gb']:.1f}GB total"
+                    f"   • GPU memory: {free_gb:.1f}GB free / {total_gb:.1f}GB total"
                 )
 
         if stats["chunk_types"]:
@@ -784,43 +791,43 @@ def status(ctx: click.Context) -> None:
 
 
 # Legacy function names for pyproject.toml compatibility
-def index_command():
+def index_command() -> None:
     """Entry point for claude-index command."""
     sys.argv = ["claude-index"] + sys.argv[1:]
     cli(["index"] + sys.argv[1:])
 
 
-def search_command():
+def search_command() -> None:
     """Entry point for claude-search command."""
     sys.argv = ["claude-search"] + sys.argv[1:]
     cli(["search"] + sys.argv[1:])
 
 
-def stats_command():
+def stats_command() -> None:
     """Entry point for claude-stats command."""
     sys.argv = ["claude-stats"] + sys.argv[1:]
     cli(["stats"] + sys.argv[1:])
 
 
-def watch_command():
+def watch_command() -> None:
     """Entry point for claude-watch command."""
     sys.argv = ["claude-watch"] + sys.argv[1:]
     cli(["watch"] + sys.argv[1:])
 
 
-def start_command():
+def start_command() -> None:
     """Entry point for claude-start command."""
     sys.argv = ["claude-start"] + sys.argv[1:]
     cli(["start"] + sys.argv[1:])
 
 
-def stop_command():
+def stop_command() -> None:
     """Entry point for claude-stop command."""
     sys.argv = ["claude-stop"] + sys.argv[1:]
     cli(["stop"] + sys.argv[1:])
 
 
-def status_command():
+def status_command() -> None:
     """Entry point for claude-status command."""
     sys.argv = ["claude-status"] + sys.argv[1:]
     cli(["status"] + sys.argv[1:])

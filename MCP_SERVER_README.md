@@ -43,9 +43,40 @@ Example configuration:
 }
 ```
 
-### 3. Restart Claude Desktop
+### 3. Configure Cursor (Alternative)
 
-After updating the configuration, restart Claude Desktop for the changes to take effect.
+If you're using Cursor IDE, you can also configure the MCP server there:
+
+```bash
+# Edit Cursor's MCP configuration
+open ~/.cursor/mcp.json
+```
+
+Add the claude-search server to your configuration:
+```json
+{
+  "mcpServers": {
+    // ... other servers ...
+    "claude-search": {
+      "command": "/path/to/semantic-search/.venv/bin/python",
+      "args": ["-m", "src.mcp_server"],
+      "cwd": "/path/to/semantic-search",
+      "env": {
+        "PYTHONPATH": "/path/to/semantic-search"
+      }
+    }
+  }
+}
+```
+
+**Important**: 
+- Replace `/path/to/semantic-search` with your actual path
+- Ensure the JSON is properly formatted (no line breaks in strings)
+- The `PYTHONPATH` environment variable is required for module imports
+
+### 4. Restart Claude Desktop or Cursor
+
+After updating the configuration, restart your application for the changes to take effect.
 
 ## Usage
 
@@ -132,11 +163,14 @@ get_chunk_by_id({
 
 ## Troubleshooting
 
-### MCP server not appearing in Claude
-1. Check that the config file is in the correct location
+### MCP server not appearing in Claude/Cursor
+1. Check that the config file is in the correct location:
+   - Claude Desktop: `~/Library/Application Support/Claude/claude_desktop_config.json`
+   - Cursor: `~/.cursor/mcp.json`
 2. Verify the path in the config points to your semantic-search directory
-3. Ensure you have restarted Claude Desktop
-4. Check Claude Desktop's developer console for errors
+3. Ensure you have restarted the application
+4. Check the developer console for errors
+5. For Cursor: Ensure JSON formatting is correct (no line breaks in string values)
 
 ### Search returns no results
 1. Verify your index is built: `uv run claude-stats`
@@ -189,7 +223,7 @@ The MCP server coexists with other interfaces:
 - The MCP server runs locally and only accesses your indexed conversations
 - No data is sent to external servers
 - The server respects the same permissions as your user account
-- Only Claude Desktop with proper configuration can access the server
+- Only Claude Desktop or Cursor with proper configuration can access the server
 
 ## Development
 

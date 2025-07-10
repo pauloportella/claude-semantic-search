@@ -12,17 +12,21 @@ class TestMCPProjectFilter:
     async def test_mcp_partial_project_filter(self):
         """Test that MCP server correctly passes project filter for partial matching."""
         mock_results = [
-            MagicMock(
-                chunk_id="chunk_001",
-                text="Persistence implementation in daisy-hft-engine",
-                similarity=0.95,
-                metadata={
+            {
+                "chunk_id": "chunk_001",
+                "text": "Persistence implementation in daisy-hft-engine",
+                "similarity": 0.95,
+                "metadata": {
                     "project": "-Users-jrbaron-dev-pauloportella-2025-trading-daisy-hft-engine",
                     "timestamp": "2025-07-07T20:00:00Z",
                     "session_id": "session_123",
                     "has_code": True,
                 },
-            )
+                "project": "-Users-jrbaron-dev-pauloportella-2025-trading-daisy-hft-engine",
+                "session": "session_123",
+                "timestamp": "2025-07-07T20:00:00Z",
+                "has_code": True,
+            }
         ]
 
         with patch("src.mcp_server.get_search_cli") as mock_get_cli:

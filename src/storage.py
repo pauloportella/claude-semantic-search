@@ -152,6 +152,8 @@ class HybridStorage:
 
     def _create_tables(self) -> None:
         """Create database tables."""
+        if not self.db:
+            raise RuntimeError("Database not initialized")
         cursor = self.db.cursor()
 
         # Chunks table
@@ -348,6 +350,11 @@ class HybridStorage:
             embeddings = embeddings / (norms + 1e-8)
 
         # Add to FAISS
+        if not self.faiss_index:
+            raise RuntimeError("FAISS index not initialized")
+        if not self.db:
+            raise RuntimeError("Database not initialized")
+            
         start_faiss_id = self.faiss_index.ntotal
         self.faiss_index.add(embeddings)
 
@@ -406,6 +413,9 @@ class HybridStorage:
     ) -> List[SearchResult]:
         """Search for similar chunks."""
         search_config = config or SearchConfig()
+        
+        if not self.faiss_index:
+            return []
 
         # Handle empty storage
         if self.faiss_index.ntotal == 0:
@@ -534,6 +544,9 @@ class HybridStorage:
 
     def get_chunk_by_id(self, chunk_id: str) -> Optional[Chunk]:
         """Get chunk by ID."""
+        if not self.db:
+            raise RuntimeError("Database not initialized")
+            
         chunk_data = self._get_chunk_data(chunk_id)
         if not chunk_data:
             return None
@@ -549,6 +562,9 @@ class HybridStorage:
 
     def get_chunks_by_session(self, session_id: str) -> List[Chunk]:
         """Get all chunks for a session."""
+        if not self.db:
+            raise RuntimeError("Database not initialized")
+            
         cursor = self.db.cursor()
         cursor.execute(
             "SELECT * FROM chunks WHERE session_id = ? ORDER BY timestamp",
@@ -570,6 +586,9 @@ class HybridStorage:
 
     def get_chunks_by_project(self, project_name: str) -> List[Chunk]:
         """Get all chunks for a project."""
+        if not self.db:
+            raise RuntimeError("Database not initialized")
+            
         cursor = self.db.cursor()
         cursor.execute(
             "SELECT * FROM chunks WHERE project_name = ? ORDER BY timestamp",
@@ -617,6 +636,9 @@ class HybridStorage:
 
     def delete_chunks_by_session(self, session_id: str) -> int:
         """Delete all chunks for a session."""
+        if not self.db:
+            raise RuntimeError("Database not initialized")
+            
         cursor = self.db.cursor()
         cursor.execute("SELECT id FROM chunks WHERE session_id = ?", (session_id,))
 
@@ -631,6 +653,9 @@ class HybridStorage:
 
     def get_stats(self) -> Dict[str, Any]:
         """Get storage statistics."""
+        if not self.db:
+            raise RuntimeError("Database not initialized")
+            
         cursor = self.db.cursor()
 
         # Basic stats
@@ -682,10 +707,11 @@ class HybridStorage:
                 "status_message": self._gpu_capability.status_message,
             }
 
-            if self._gpu_capability.gpu_memory_total:
+            if self._gpu_capability.gpu_memory_total is not None:
                 stats["gpu_info"]["gpu_memory_total_gb"] = (
                     self._gpu_capability.gpu_memory_total / (1024**3)
                 )
+            if self._gpu_capability.gpu_memory_free is not None:
                 stats["gpu_info"]["gpu_memory_free_gb"] = (
                     self._gpu_capability.gpu_memory_free / (1024**3)
                 )
@@ -733,6 +759,9 @@ class HybridStorage:
     def update_file_info(self, file_path: str, chunk_count: int) -> None:
         """Update file information after indexing."""
         import os
+        
+        if not self.db:
+            raise RuntimeError("Database not initialized")
 
         # Get file modification time if file exists
         try:
@@ -840,6 +869,10 @@ class HybridStorage:
 
     def save_index(self) -> None:
         """Save FAISS index to disk."""
+        if not self.faiss_index:
+            self.logger.warning("No FAISS index to save")
+            return
+            
         if self._is_gpu_index:
             # Convert GPU index to CPU for saving
             cpu_index = self._convert_to_cpu_index(self.faiss_index)
@@ -862,7 +895,7 @@ class HybridStorage:
             faiss.write_index(self.faiss_index, str(backup_index_path))
 
         # Backup database
-        if self.db_path.exists():
+        if self.db_path.exists() and self.db:
             backup_db_path = backup_path / self.config.db_name
             backup_db = sqlite3.connect(str(backup_db_path))
             self.db.backup(backup_db)
@@ -945,11 +978,11 @@ class HybridStorage:
 
         self.logger.info("Storage closed")
 
-    def __enter__(self):
+    def __enter__(self) -> "HybridStorage":
         """Context manager entry."""
         self.initialize()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         """Context manager exit."""
         self.close()

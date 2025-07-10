@@ -214,8 +214,9 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
             if not full_content and len(content) > 500:
                 content = content[:500] + "..."
 
+            similarity = float(result['similarity']) if result.get('similarity') is not None else 0.0
             output.append(
-                f"### Result {i} [Similarity: {result['similarity']:.3f}]\n"
+                f"### Result {i} [Similarity: {similarity:.3f}]\n"
                 f"**Chunk ID**: {result['chunk_id']}\n"
                 f"**Project**: {result.get('project', 'Unknown')}\n"
                 f"**Time**: {result.get('timestamp', 'Unknown')}\n"
