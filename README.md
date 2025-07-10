@@ -10,6 +10,10 @@ A powerful semantic search system for Claude conversations that enables fast, in
 - **CLI Interface**: Simple command-line tools for indexing and searching
 - **Alfred Integration**: JSON output format ready for Alfred workflows
 - **Incremental Updates**: Efficient indexing of new conversations
+- **Date-based Filtering**: Filter search results by date ranges
+- **Session Threading**: Search within specific conversation sessions
+- **Related Chunks**: Find related chunks within the same conversation session
+- **Direct Chunk Access**: Retrieve specific chunks by ID with full content
 
 ## Installation
 
@@ -80,8 +84,14 @@ uv run claude-stats
 
 - `--project <name>`: Filter by project name
 - `--has-code`: Only show chunks containing code
-- `--has-tools`: Only show chunks with tool usage
 - `--top-k <n>`: Limit number of results (default: 10)
+- `--after <date>`: Filter for chunks after date (YYYY-MM-DD)
+- `--before <date>`: Filter for chunks before date (YYYY-MM-DD)
+- `--session <id>`: Filter by session ID
+- `--related-to <chunk-id>`: Find chunks related to given chunk ID
+- `--same-session`: Include chunks from same session (use with --related-to)
+- `--full-content`: Show full content instead of truncated
+- `--chunk-id <id>`: Get specific chunk by ID
 
 #### Examples
 
@@ -94,6 +104,18 @@ uv run claude-search "database migration" --project "my-app"
 
 # Get top 20 results about testing
 uv run claude-search "unit testing" --top-k 20
+
+# Filter by date range
+uv run claude-search "kubernetes deployment" --after 2024-01-01 --before 2024-12-31
+
+# Get specific chunk with full content
+uv run claude-search --chunk-id "chunk_abc123" --full-content
+
+# Find related chunks in same session
+uv run claude-search --related-to "chunk_abc123" --same-session
+
+# Search within specific session
+uv run claude-search "error handling" --session "session_xyz789"
 ```
 
 ## Architecture
