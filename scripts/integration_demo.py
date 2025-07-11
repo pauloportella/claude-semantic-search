@@ -173,7 +173,7 @@ def demonstrate_embeddings(chunks: List[Any]) -> List[Any]:
     config = EmbeddingConfig(
         model_name="all-mpnet-base-v2",
         batch_size=8,
-        cache_dir="./data/models"
+        cache_dir=str(Path.home() / ".claude-semantic-search" / "models")
     )
     
     embedder = EmbeddingGenerator(config)
@@ -218,7 +218,7 @@ def demonstrate_storage(chunks: List[Any]) -> HybridStorage:
     
     # Configure storage
     config = StorageConfig(
-        data_dir="./data/demo",
+        data_dir=str(Path.home() / ".claude-semantic-search" / "data-demo"),
         embedding_dim=768,
         auto_save=True
     )
@@ -265,7 +265,7 @@ def demonstrate_search(storage: HybridStorage) -> None:
     config = EmbeddingConfig(
         model_name="all-mpnet-base-v2",
         batch_size=8,
-        cache_dir="./data/models"
+        cache_dir=str(Path.home() / ".claude-semantic-search" / "models")
     )
     
     embedder = EmbeddingGenerator(config)

@@ -17,8 +17,8 @@ from tqdm import tqdm
 
 def get_model_cache_dir() -> Path:
     """Get the directory for caching models."""
-    current_dir = Path(__file__).parent.parent
-    cache_dir = current_dir / "data" / "models"
+    data_dir = os.environ.get("CLAUDE_SEARCH_DATA_DIR", "~/.claude-semantic-search/data")
+    cache_dir = Path(data_dir).expanduser() / "models"
     cache_dir.mkdir(parents=True, exist_ok=True)
     return cache_dir
 

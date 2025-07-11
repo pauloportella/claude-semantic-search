@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import sqlite3
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
@@ -132,8 +133,8 @@ def get_search_cli(use_gpu: bool = False) -> SemanticSearchCLI:
     """Get or create search CLI instance with appropriate settings."""
     global search_cli
     if search_cli is None or search_cli.use_gpu != use_gpu:
-        # Use the same default data directory as the CLI
-        data_dir = "./data"
+        # Use environment variable or default data directory
+        data_dir = os.environ.get("CLAUDE_SEARCH_DATA_DIR", "~/.claude-semantic-search/data")
         search_cli = SemanticSearchCLI(data_dir, use_gpu=use_gpu)
     return search_cli
 

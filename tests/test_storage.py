@@ -25,7 +25,7 @@ class TestStorageConfig:
     def test_config_defaults(self):
         """Test StorageConfig default values."""
         config = StorageConfig()
-        assert config.data_dir == "./data"
+        assert config.data_dir == "~/.claude-semantic-search/data"
         assert config.db_name == "metadata.db"
         assert config.index_name == "embeddings.faiss"
         assert config.embedding_dim == 768

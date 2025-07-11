@@ -47,6 +47,23 @@ Your Claude conversations contain valuable knowledge - code solutions, architect
 
 ### Setup
 
+#### Option 1: Automated Installation (Recommended)
+
+1. **Clone and run the install script:**
+```bash
+git clone https://github.com/pauloportella/claude-semantic-search
+cd claude-semantic-search
+./install.sh
+```
+
+This will:
+- Install the MCP server and CLI tools globally
+- Configure Claude Code to use the semantic search MCP server
+- Download the embedding model (~420MB)
+- Make all commands available system-wide
+
+#### Option 2: Manual Installation
+
 1. **Clone and setup the project:**
 ```bash
 git clone https://github.com/pauloportella/claude-semantic-search
@@ -54,42 +71,97 @@ cd claude-semantic-search
 uv sync
 ```
 
-2. **(Optional) Install GPU support for 5-10x faster performance:**
+2. **Install as a global tool (for use outside the project directory):**
 ```bash
-# GPU support requires conda due to Python version constraints
-conda install pytorch torchvision torchaudio pytorch-cuda=12.1 -c pytorch -c nvidia
-conda install faiss-gpu -c conda-forge
+uv tool install .
 ```
 
-3. **Download the embedding model:**
+3. **Configure Claude Code** by adding to `~/.claude.json`:
+```json
+{
+  "mcpServers": {
+    "claude-semantic-search": {
+      "command": "claude-search-mcp",
+      "args": []
+    }
+  }
+}
+```
+
+4. **Download the embedding model:**
 ```bash
-uv run setup-models
+setup-models  # If installed globally
+# OR
+uv run setup-models  # If using local installation
 ```
 
 This downloads the all-mpnet-base-v2 model (~420MB) for high-quality embeddings.
+
+### GPU Support (Optional)
+
+For 5-10x faster performance, install GPU support:
+
+```bash
+# NVIDIA CUDA systems
+conda install pytorch torchvision torchaudio pytorch-cuda=12.1 -c pytorch -c nvidia
+conda install faiss-gpu -c conda-forge
+
+# Apple Silicon (M1/M2/M3/M4) - PyTorch MPS support is already included
+# No additional installation needed!
+```
 
 ## Quick Start
 
 ### 1. Index Your Conversations
 ```bash
-uv run claude-index
+claude-index  # If installed globally
+# OR
+uv run claude-index  # If using local installation
 ```
 
 ### 2. Search from Terminal
 ```bash
-uv run claude-search "your search query"
+claude-search "your search query"  # If installed globally
+# OR
+uv run claude-search "your search query"  # If using local installation
 ```
 
-### 3. Enable in Claude Desktop/Cursor
-```bash
-# For Claude Desktop
-cp configs/claude_desktop_config.example.json ~/Library/Application\ Support/Claude/claude_desktop_config.json
+### 3. Enable in Claude Code, Claude Desktop, and Cursor
+If you used the automated installation, all supported applications are already configured:
+- ✅ Claude Code
+- ✅ Claude Desktop (macOS)
+- ✅ Cursor IDE
 
-# For Cursor IDE
-# Add to ~/.cursor/mcp.json (see MCP_SERVER_README.md for details)
+The install script automatically configures the MCP server for all detected applications.
+
+If you need to manually configure later, add this to the respective config files:
+
+**Claude Code** (`~/.claude.json`) and **Cursor** (`~/.cursor/mcp.json`):
+```json
+{
+  "mcpServers": {
+    "claude-semantic-search": {
+      "command": "claude-search-mcp",
+      "args": []
+    }
+  }
+}
 ```
 
-Then restart Claude Desktop or Cursor and search naturally:
+**Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+```json
+{
+  "mcpServers": {
+    "claude-semantic-search": {
+      "command": "$HOME/.local/bin/claude-search-mcp",
+      "args": []
+    }
+  }
+}
+```
+Note: Claude Desktop requires the full path since it doesn't have `~/.local/bin` in its PATH.
+
+Restart the applications and search naturally:
 - "Search for my GPU performance discussions"
 - "Find conversations about the daisy project with code"
 
@@ -348,55 +420,67 @@ graph TB
 
 ## Alfred Integration
 
-The CLI provides JSON output perfect for Alfred workflows:
+A complete Alfred workflow is included for macOS users.
+
+### Quick Install
+
+```bash
+cd alfred-workflow
+make install
+```
+
+This will build and install the workflow. Then configure your paths in Alfred Preferences → Workflows → Claude Semantic Search → [⚙️]
+
+### Features
+
+- `ccs <query>` - Search all conversations
+- `ccp` - Browse projects (coming soon)
+- `ccr <query>` - Recent conversations (coming soon)
+- `ccc <query>` - Code chunks only (coming soon)
+
+### Keyboard Modifiers
+
+- `⌃` + Return - Resume session in tmux with `claude -r`
+- `⌘` + Return - Copy chunk text to clipboard
+- `⌥` + Return - View in large type
+
+### JSON Output
+
+The CLI provides JSON output for custom Alfred workflows:
 
 ```bash
 uv run claude-search "your query" --json
 ```
 
-Returns structured JSON with:
-- `uid`: Unique chunk identifier
-- `title`: Truncated text preview
-- `subtitle`: Project name and similarity score
-- `arg`: Chunk ID for further processing
-- `text`: Full chunk text
-- `variables`: Metadata (similarity, project, session, timestamp)
-
-### Sample Alfred Script
-
-```bash
-#!/bin/bash
-query="$1"
-cd /path/to/semantic-search
-uv run claude-search "$query" --json
-```
-
 ## MCP Server Integration
 
-The MCP (Model Context Protocol) server enables native integration with Claude Desktop and Cursor IDE, allowing you to search your conversation history directly within your AI tools.
+The MCP (Model Context Protocol) server enables native integration with Claude Code, Claude Desktop, and Cursor IDE, allowing you to search your conversation history directly within your AI tools.
 
-### Quick Setup
+### Automatic Setup
 
-#### Claude Desktop
-```bash
-cp configs/claude_desktop_config.example.json ~/Library/Application\ Support/Claude/claude_desktop_config.json
-# Edit the config and set your correct path
-```
+The install script (`./install.sh`) automatically configures the MCP server for all supported applications:
+- Claude Code (`~/.claude.json`)
+- Claude Desktop (`~/Library/Application Support/Claude/claude_desktop_config.json`)
+- Cursor IDE (`~/.cursor/mcp.json`)
 
-#### Cursor IDE
-Add to `~/.cursor/mcp.json`:
+No manual configuration needed! Just run the install script and restart your applications.
+
+### Manual Configuration
+
+If you need to manually add the MCP server to any application, add this configuration:
+
 ```json
 {
   "mcpServers": {
-    "claude-search": {
-      "command": "/Users/USERNAME/.local/bin/uv",
-      "args": ["run", "--directory", "/path/to/claude-semantic-search", "claude-search-mcp"],
-      "cwd": "/path/to/claude-semantic-search"
+    "claude-semantic-search": {
+      "command": "claude-search-mcp",
+      "args": []
     }
   }
 }
 ```
-**Note**: Replace `/Users/USERNAME/.local/bin/uv` with your actual UV path (find it with `which uv`)
+
+This works because the install script installs `claude-search-mcp` as a global command.
 
 ### Available MCP Tools
 
@@ -408,13 +492,19 @@ Add to `~/.cursor/mcp.json`:
 
 ### Example Usage
 
-In Claude Desktop or Cursor, simply ask:
+In Claude Code, Claude Desktop, or Cursor, simply ask:
 - "Search for my GPU performance discussions"
 - "Find conversations about daisy project with code"
 - "Show me all indexed projects"
 - "Get chunk chunk_12345"
 
-For detailed MCP setup and troubleshooting, see [MCP_SERVER_README.md](MCP_SERVER_README.md).
+### Troubleshooting
+
+If the MCP server isn't working:
+1. Ensure you ran `./install.sh` and it completed successfully
+2. Check that `which claude-search-mcp` returns a path
+3. Restart the application (Claude Code/Desktop/Cursor)
+4. Verify the configuration file exists and contains the MCP server entry
 
 ## Development
 
@@ -470,9 +560,21 @@ uv run flake8 src/
 ### Command-Line Options
 
 - `--claude-dir`: Specify Claude projects directory (default: `~/.claude/projects`)
-- `--data-dir`: Specify data directory for indexes and models
+- `--data-dir`: Specify data directory for indexes and models (default: `~/.claude-semantic-search/data`, env: `CLAUDE_SEARCH_DATA_DIR`)
 - `--force`: Force reindexing (clears existing data)
 - `--gpu`: Enable GPU acceleration
+
+### Data Directory
+
+By default, all data (indexes, models, and metadata) is stored in `~/.claude-semantic-search/data`. This ensures:
+- Consistent location across all tools (CLI, MCP server, daemon)
+- No permission issues with system directories
+- Easy backup and migration
+
+You can customize the data directory:
+- **Environment variable**: `export CLAUDE_SEARCH_DATA_DIR=/your/custom/path`
+- **Command line**: `--data-dir /your/custom/path`
+- **Installation**: The install script prompts you to choose a custom location
 
 ### Storage Configuration
 

@@ -185,22 +185,28 @@ class TestJSONLParser:
 
     def test_parse_file_success(self):
         """Test parsing a valid JSONL file."""
-        # Ensure the sample file exists
-        assert self.sample_file.exists(), f"Sample file not found: {self.sample_file}"
+        # Mock sample conversation data
+        sample_data = """{"uuid": "msg-001", "role": "user", "content": "Hello", "timestamp": "2024-01-15T10:00:00Z", "sessionId": "session-123"}
+{"uuid": "msg-002", "role": "assistant", "content": "Hi there!", "timestamp": "2024-01-15T10:00:01Z", "sessionId": "session-123"}
+{"uuid": "msg-003", "role": "user", "content": "Can you write code?", "timestamp": "2024-01-15T10:00:02Z", "sessionId": "session-123"}
+{"uuid": "msg-004", "role": "assistant", "content": [{"type": "text", "text": "Sure, here's an example:"}, {"type": "code", "language": "python", "text": "print('Hello, World!')"}], "timestamp": "2024-01-15T10:00:03Z", "sessionId": "session-123"}
+{"uuid": "msg-005", "role": "user", "content": "Thanks!", "timestamp": "2024-01-15T10:00:04Z", "sessionId": "session-123", "toolCalls": [{"id": "tool-1", "name": "test_tool", "arguments": {}}]}"""
 
-        conversation = self.parser.parse_file(str(self.sample_file))
+        with patch("builtins.open", mock_open(read_data=sample_data)):
+            with patch("pathlib.Path.exists", return_value=True):
+                conversation = self.parser.parse_file("/fake/sample.jsonl")
 
-        assert conversation is not None
-        assert conversation.session_id == "session-123"
-        assert conversation.total_messages == 5
-        assert conversation.has_code_blocks is True
-        assert conversation.has_tool_usage is True
-        assert len(conversation.messages) == 5
+                assert conversation is not None
+                assert conversation.session_id == "session-123"
+                assert conversation.total_messages == 5
+                assert conversation.has_code_blocks is True
+                assert conversation.has_tool_usage is True
+                assert len(conversation.messages) == 5
 
-        # Check message order
-        assert conversation.messages[0].role == "user"
-        assert conversation.messages[1].role == "assistant"
-        assert conversation.messages[3].has_code is True
+                # Check message order
+                assert conversation.messages[0].role == "user"
+                assert conversation.messages[1].role == "assistant"
+                assert conversation.messages[3].has_code is True
 
     def test_parse_file_not_found(self):
         """Test parsing non-existent file."""
@@ -222,12 +228,38 @@ class TestJSONLParser:
 
     def test_scan_directory(self):
         """Test scanning directory for JSONL files."""
-        # Create a generator and convert to list
-        conversations = list(self.parser.scan_directory(str(self.test_data_dir)))
-
-        assert len(conversations) >= 1
-        assert all(isinstance(conv, Conversation) for conv in conversations)
-        assert any(conv.session_id == "session-123" for conv in conversations)
+        # Mock conversation data
+        conv1_data = """{"uuid": "msg-001", "role": "user", "content": "Hello", "timestamp": "2024-01-15T10:00:00Z", "sessionId": "session-123"}"""
+        conv2_data = """{"uuid": "msg-002", "role": "assistant", "content": "Hi", "timestamp": "2024-01-15T10:00:01Z", "sessionId": "session-456"}"""
+        
+        # Mock the rglob to return specific paths
+        mock_jsonl_files = [Path("/fake/dir/conv1.jsonl"), Path("/fake/dir/conv2.jsonl")]
+        
+        def mock_open_side_effect(file_path, *args, **kwargs):
+            file_path_str = str(file_path)
+            if "conv1.jsonl" in file_path_str:
+                return mock_open(read_data=conv1_data)()
+            elif "conv2.jsonl" in file_path_str:
+                return mock_open(read_data=conv2_data)()
+            raise FileNotFoundError(f"No such file: {file_path}")
+        
+        with patch("pathlib.Path.exists", return_value=True):
+            with patch("pathlib.Path.rglob") as mock_rglob:
+                # Return mock files for *.jsonl pattern, empty for *.json
+                def rglob_side_effect(pattern):
+                    if pattern == "*.jsonl":
+                        return mock_jsonl_files
+                    return []
+                
+                mock_rglob.side_effect = rglob_side_effect
+                
+                with patch("builtins.open", side_effect=mock_open_side_effect):
+                    conversations = list(self.parser.scan_directory("/fake/dir"))
+                    
+                    assert len(conversations) == 2
+                    assert all(isinstance(conv, Conversation) for conv in conversations)
+                    assert any(conv.session_id == "session-123" for conv in conversations)
+                    assert any(conv.session_id == "session-456" for conv in conversations)
 
     def test_scan_directory_not_found(self):
         """Test scanning non-existent directory."""

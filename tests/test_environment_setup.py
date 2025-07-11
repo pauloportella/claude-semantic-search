@@ -114,10 +114,6 @@ def test_directory_structure():
         "src",
         "tests",
         "scripts",
-        "data",
-        "data/models",
-        "data/test_fixtures",
-        "data/indices",
     ]
 
     for dir_name in required_dirs:
@@ -132,7 +128,6 @@ def test_project_files():
 
     required_files = [
         "pyproject.toml",
-        "IMPLEMENTATION_PLAN.md",
         ".gitignore",
         "scripts/model_setup.py",
         "src/__init__.py",

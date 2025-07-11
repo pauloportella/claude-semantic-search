@@ -71,18 +71,11 @@ ehthumbs.db
 Thumbs.db
 
 # Project specific
-data/models/
-data/indices/
-data/embeddings.faiss
-data/metadata.db
-data/embeddings.faiss.index
+data/
 *.faiss
 *.db
 *.sqlite
 *.sqlite3
-# Keep demo files
-!data/demo/embeddings.faiss
-!data/demo/metadata.db
 
 # Logs
 *.log
