@@ -120,10 +120,10 @@ class ConversationWatcher:
     """File watcher for Claude conversations."""
 
     def __init__(
-        self, data_dir: str = "./data", debounce_seconds: int = 5, use_gpu: bool = False
+        self, data_dir: str = None, debounce_seconds: int = 5, use_gpu: bool = False
     ):
         """Initialize watcher."""
-        self.data_dir = data_dir
+        self.data_dir = data_dir or os.environ.get("CLAUDE_SEARCH_DATA_DIR", "~/.claude-semantic-search/data")
         self.debounce_seconds = debounce_seconds
         self.use_gpu = use_gpu
         self.cli_instance = SemanticSearchCLI(data_dir, use_gpu)
@@ -316,12 +316,13 @@ class ConversationWatcher:
 
 
 def run_watcher(
-    data_dir: str = "./data",
+    data_dir: str = None,
     claude_dir: str = "~/.claude/projects",
     debounce_seconds: int = 5,
     use_gpu: bool = False,
 ):
     """Run the file watcher in interactive mode."""
+    data_dir = data_dir or os.environ.get("CLAUDE_SEARCH_DATA_DIR", "~/.claude-semantic-search/data")
     watcher = ConversationWatcher(data_dir, debounce_seconds, use_gpu)
 
     try:
@@ -332,12 +333,13 @@ def run_watcher(
 
 
 def start_daemon(
-    data_dir: str = "./data",
+    data_dir: str = None,
     claude_dir: str = "~/.claude/projects",
     debounce_seconds: int = 5,
     use_gpu: bool = False,
 ):
     """Start the file watcher as a daemon."""
+    data_dir = data_dir or os.environ.get("CLAUDE_SEARCH_DATA_DIR", "~/.claude-semantic-search/data")
     watcher = ConversationWatcher(data_dir, debounce_seconds, use_gpu)
 
     # Fork process to run in background
@@ -362,8 +364,9 @@ def start_daemon(
         sys.exit(1)
 
 
-def stop_daemon(data_dir: str = "./data"):
+def stop_daemon(data_dir: str = None):
     """Stop the file watcher daemon."""
+    data_dir = data_dir or os.environ.get("CLAUDE_SEARCH_DATA_DIR", "~/.claude-semantic-search/data")
     watcher = ConversationWatcher(data_dir)
 
     try:
@@ -377,8 +380,9 @@ def stop_daemon(data_dir: str = "./data"):
         sys.exit(1)
 
 
-def daemon_status(data_dir: str = "./data"):
+def daemon_status(data_dir: str = None):
     """Check daemon status."""
+    data_dir = data_dir or os.environ.get("CLAUDE_SEARCH_DATA_DIR", "~/.claude-semantic-search/data")
     watcher = ConversationWatcher(data_dir)
 
     if watcher.is_daemon_running():

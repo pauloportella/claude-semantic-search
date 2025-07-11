@@ -44,7 +44,7 @@ if TYPE_CHECKING:
 class StorageConfig:
     """Configuration for hybrid storage."""
 
-    data_dir: str = "./data"
+    data_dir: str = "~/.claude-semantic-search/data"
     db_name: str = "metadata.db"
     index_name: str = "embeddings.faiss"
     embedding_dim: int = 768
@@ -88,7 +88,7 @@ class HybridStorage:
         self.logger: logging.Logger = logging.getLogger(__name__)
 
         # Initialize storage paths
-        self.data_dir: Path = Path(self.config.data_dir)
+        self.data_dir: Path = Path(self.config.data_dir).expanduser()
         self.data_dir.mkdir(parents=True, exist_ok=True)
 
         self.db_path: Path = self.data_dir / self.config.db_name

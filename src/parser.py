@@ -157,7 +157,12 @@ class JSONLParser:
         text_parts = []
         for block in blocks:
             if isinstance(block, dict):
-                if "text" in block:
+                if block.get("type") == "code":
+                    # Format code blocks with markdown
+                    language = block.get("language", "")
+                    code_text = block.get("text", "")
+                    text_parts.append(f"```{language}\n{code_text}\n```")
+                elif "text" in block:
                     text_parts.append(block["text"])
                 elif "content" in block:
                     text_parts.append(str(block["content"]))
@@ -218,13 +223,17 @@ class JSONLParser:
         """Extract tool calls from message data."""
         tool_calls = []
 
-        # Check for tool_calls field
+        # Check for tool_calls field (both snake_case and camelCase)
         if "tool_calls" in data:
             tool_calls.extend(data["tool_calls"])
+        elif "toolCalls" in data:
+            tool_calls.extend(data["toolCalls"])
 
         # Check for function calls in content
         if "function_call" in data:
             tool_calls.append(data["function_call"])
+        elif "functionCall" in data:
+            tool_calls.append(data["functionCall"])
 
         return tool_calls
 

@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import sys
 import time
 from datetime import datetime
@@ -34,10 +35,10 @@ logger: logging.Logger = logging.getLogger(__name__)
 class SemanticSearchCLI:
     """Main CLI class for semantic search operations."""
 
-    def __init__(self, data_dir: str = "./data", use_gpu: bool = False) -> None:
+    def __init__(self, data_dir: str = "~/.claude-semantic-search/data", use_gpu: bool = False) -> None:
         """Initialize CLI with data directory and GPU option."""
-        self.data_dir: Path = Path(data_dir)
-        self.data_dir.mkdir(exist_ok=True)
+        self.data_dir: Path = Path(data_dir).expanduser()
+        self.data_dir.mkdir(parents=True, exist_ok=True)
         self.use_gpu: bool = use_gpu
 
         # Initialize components
@@ -278,7 +279,11 @@ class SemanticSearchCLI:
 
 
 @click.group()
-@click.option("--data-dir", default="./data", help="Data directory for storage")
+@click.option(
+    "--data-dir",
+    default=lambda: os.environ.get("CLAUDE_SEARCH_DATA_DIR", "~/.claude-semantic-search/data"),
+    help="Data directory for storage (env: CLAUDE_SEARCH_DATA_DIR)"
+)
 @click.pass_context
 def cli(ctx: click.Context, data_dir: str) -> None:
     """Claude Semantic Search CLI - Index and search your Claude conversations."""
@@ -790,46 +795,54 @@ def status(ctx: click.Context) -> None:
     daemon_status(data_dir=ctx.obj["data_dir"])
 
 
-# Legacy function names for pyproject.toml compatibility
+# Entry points for direct command usage
 def index_command() -> None:
     """Entry point for claude-index command."""
-    sys.argv = ["claude-index"] + sys.argv[1:]
+    import sys
+    # Set program name and pass subcommand with all arguments
+    sys.argv[0] = "claude-index"
     cli(["index"] + sys.argv[1:])
 
 
 def search_command() -> None:
     """Entry point for claude-search command."""
-    sys.argv = ["claude-search"] + sys.argv[1:]
+    import sys
+    sys.argv[0] = "claude-search"
     cli(["search"] + sys.argv[1:])
 
 
 def stats_command() -> None:
     """Entry point for claude-stats command."""
-    sys.argv = ["claude-stats"] + sys.argv[1:]
+    import sys
+    sys.argv[0] = "claude-stats"
     cli(["stats"] + sys.argv[1:])
 
 
 def watch_command() -> None:
     """Entry point for claude-watch command."""
-    sys.argv = ["claude-watch"] + sys.argv[1:]
+    import sys
+    sys.argv[0] = "claude-watch"
     cli(["watch"] + sys.argv[1:])
 
 
 def start_command() -> None:
     """Entry point for claude-start command."""
-    sys.argv = ["claude-start"] + sys.argv[1:]
+    import sys
+    sys.argv[0] = "claude-start"
     cli(["start"] + sys.argv[1:])
 
 
 def stop_command() -> None:
     """Entry point for claude-stop command."""
-    sys.argv = ["claude-stop"] + sys.argv[1:]
+    import sys
+    sys.argv[0] = "claude-stop"
     cli(["stop"] + sys.argv[1:])
 
 
 def status_command() -> None:
     """Entry point for claude-status command."""
-    sys.argv = ["claude-status"] + sys.argv[1:]
+    import sys
+    sys.argv[0] = "claude-status"
     cli(["status"] + sys.argv[1:])
 
 
