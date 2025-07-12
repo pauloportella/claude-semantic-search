@@ -147,12 +147,23 @@ class ConversationWatcher:
         logger.info(f"Starting file watcher for: {claude_path}")
         logger.info(f"Debounce interval: {self.debounce_seconds} seconds")
 
-        # Initialize storage and models
-        self.cli_instance.storage.initialize()
-        if not self.cli_instance.embedder.is_model_loaded:
-            logger.info("Loading embedding model...")
-            self.cli_instance.embedder.load_model()
-            logger.info("Model loaded successfully")
+        # Initialize storage and models with timeout
+        def timeout_handler(signum, frame):
+            raise TimeoutError("Model loading timeout (60s) - consider running 'setup-models' first")
+        
+        # Set 60 second timeout for model loading
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(60)
+        
+        try:
+            self.cli_instance.storage.initialize()
+            if not self.cli_instance.embedder.is_model_loaded:
+                logger.info("Loading embedding model...")
+                self.cli_instance.embedder.load_model()
+                logger.info("Model loaded successfully")
+        finally:
+            # Cancel the alarm
+            signal.alarm(0)
 
         # Start watching recursively
         self.observer.schedule(self.handler, str(claude_path), recursive=True)
@@ -200,8 +211,6 @@ class ConversationWatcher:
 
     def setup_daemon_logging(self):
         """Setup logging for daemon mode."""
-        print(f"setup_daemon_logging: self.log_file = {self.log_file!r}")
-        print(f"setup_daemon_logging: current directory = {os.getcwd()!r}")
         # Ensure log directory exists
         self.log_file.parent.mkdir(parents=True, exist_ok=True)
         # Create file handler for daemon logging
@@ -348,19 +357,13 @@ def start_daemon(
     use_gpu: bool = False,
 ):
     """Start the file watcher as a daemon."""
-    print(f"start_daemon called with data_dir: {data_dir!r}")
     data_dir = data_dir or os.environ.get("CLAUDE_SEARCH_DATA_DIR", "~/.claude-semantic-search/data")
-    print(f"After default: {data_dir!r}")
     data_dir = str(Path(data_dir).expanduser())  # Expand ~ to full path
-    print(f"After expand: {data_dir!r}")
     watcher = ConversationWatcher(data_dir, debounce_seconds, use_gpu)
 
     # Fork process to run in background
     try:
-        print(f"Parent process CWD: {os.getcwd()}")
-        print(f"About to fork...")
         pid = os.fork()
-        print(f"Fork returned pid: {pid}")
         if pid > 0:
             # Parent process - exit
             print(f"✅ Watcher daemon started with PID: {pid}")
@@ -368,29 +371,14 @@ def start_daemon(
             print(f"💾 Data directory: {data_dir}")
             print(f"📝 Log file: {watcher.log_file}")
             return
-        else:
-            # Child process
-            print(f"In child process, pid=0")
     except OSError:
         # Fork not supported (Windows), run directly
-        print("Fork failed, running directly")
         pass
 
     # Child process or non-Unix system
-    # Debug immediately 
-    with open("/tmp/claude_debug.txt", "w") as f:
-        f.write("Child process started\n")
-        f.write(f"Child process CWD: {os.getcwd()}\n")
-        f.write(f"Child process - watcher.data_dir: {watcher.data_dir!r}\n")
-        f.write(f"Child process - watcher.log_file: {watcher.log_file!r}\n")
-    
     try:
         watcher.start_daemon(claude_dir)
     except Exception as e:
-        with open("/tmp/claude_debug.txt", "a") as f:
-            f.write(f"Exception: {str(e)}\n")
-            import traceback
-            f.write(traceback.format_exc())
         print(f"❌ Failed to start daemon: {str(e)}")
         sys.exit(1)
 
