@@ -135,6 +135,7 @@ def get_search_cli(use_gpu: bool = False) -> SemanticSearchCLI:
     if search_cli is None or search_cli.use_gpu != use_gpu:
         # Use environment variable or default data directory
         data_dir = os.environ.get("CLAUDE_SEARCH_DATA_DIR", "~/.claude-semantic-search/data")
+        data_dir = str(Path(data_dir).expanduser())  # Expand ~ to full path
         search_cli = SemanticSearchCLI(data_dir, use_gpu=use_gpu)
     return search_cli
 
