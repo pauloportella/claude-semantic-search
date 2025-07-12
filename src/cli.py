@@ -288,7 +288,8 @@ class SemanticSearchCLI:
 def cli(ctx: click.Context, data_dir: str) -> None:
     """Claude Semantic Search CLI - Index and search your Claude conversations."""
     ctx.ensure_object(dict)
-    ctx.obj["data_dir"] = data_dir
+    # Expand user path to handle ~ properly
+    ctx.obj["data_dir"] = str(Path(data_dir).expanduser())
 
 
 @cli.command()

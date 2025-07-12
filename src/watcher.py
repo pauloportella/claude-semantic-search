@@ -123,12 +123,9 @@ class ConversationWatcher:
         self, data_dir: str = None, debounce_seconds: int = 5, use_gpu: bool = False
     ):
         """Initialize watcher."""
-        print(f"DEBUG INIT: input data_dir = {data_dir}")
         self.data_dir = data_dir or os.environ.get("CLAUDE_SEARCH_DATA_DIR", "~/.claude-semantic-search/data")
-        print(f"DEBUG INIT: after default = {self.data_dir}")
         # Expand user path to handle ~ properly
         self.data_dir = str(Path(self.data_dir).expanduser())
-        print(f"DEBUG INIT: after expand = {self.data_dir}")
         self.debounce_seconds = debounce_seconds
         self.use_gpu = use_gpu
         self.cli_instance = SemanticSearchCLI(self.data_dir, use_gpu)
@@ -137,7 +134,6 @@ class ConversationWatcher:
         self.is_running = False
         self.pid_file = Path(self.data_dir) / "watcher.pid"
         self.log_file = Path(self.data_dir) / "watcher.log"
-        print(f"DEBUG INIT: final paths - pid={self.pid_file}, log={self.log_file}")
 
     def start_watching(self, claude_dir: str = "~/.claude/projects"):
         """Start watching for file changes."""
@@ -204,10 +200,8 @@ class ConversationWatcher:
 
     def setup_daemon_logging(self):
         """Setup logging for daemon mode."""
-        # Debug: Print the actual paths
-        print(f"DEBUG: self.data_dir = {self.data_dir}")
-        print(f"DEBUG: self.log_file = {self.log_file}")
-        print(f"DEBUG: self.log_file.parent = {self.log_file.parent}")
+        print(f"setup_daemon_logging: self.log_file = {self.log_file!r}")
+        print(f"setup_daemon_logging: current directory = {os.getcwd()!r}")
         # Ensure log directory exists
         self.log_file.parent.mkdir(parents=True, exist_ok=True)
         # Create file handler for daemon logging
@@ -231,9 +225,6 @@ class ConversationWatcher:
 
     def write_pid_file(self):
         """Write PID file."""
-        # Debug: Print the actual paths
-        print(f"DEBUG PID: self.data_dir = {self.data_dir}")
-        print(f"DEBUG PID: self.pid_file = {self.pid_file}")
         # Ensure directory exists
         self.pid_file.parent.mkdir(parents=True, exist_ok=True)
         with open(self.pid_file, "w") as f:
@@ -357,13 +348,19 @@ def start_daemon(
     use_gpu: bool = False,
 ):
     """Start the file watcher as a daemon."""
+    print(f"start_daemon called with data_dir: {data_dir!r}")
     data_dir = data_dir or os.environ.get("CLAUDE_SEARCH_DATA_DIR", "~/.claude-semantic-search/data")
+    print(f"After default: {data_dir!r}")
     data_dir = str(Path(data_dir).expanduser())  # Expand ~ to full path
+    print(f"After expand: {data_dir!r}")
     watcher = ConversationWatcher(data_dir, debounce_seconds, use_gpu)
 
     # Fork process to run in background
     try:
+        print(f"Parent process CWD: {os.getcwd()}")
+        print(f"About to fork...")
         pid = os.fork()
+        print(f"Fork returned pid: {pid}")
         if pid > 0:
             # Parent process - exit
             print(f"✅ Watcher daemon started with PID: {pid}")
@@ -371,20 +368,30 @@ def start_daemon(
             print(f"💾 Data directory: {data_dir}")
             print(f"📝 Log file: {watcher.log_file}")
             return
+        else:
+            # Child process
+            print(f"In child process, pid=0")
     except OSError:
         # Fork not supported (Windows), run directly
+        print("Fork failed, running directly")
         pass
 
     # Child process or non-Unix system
+    # Debug immediately 
+    with open("/tmp/claude_debug.txt", "w") as f:
+        f.write("Child process started\n")
+        f.write(f"Child process CWD: {os.getcwd()}\n")
+        f.write(f"Child process - watcher.data_dir: {watcher.data_dir!r}\n")
+        f.write(f"Child process - watcher.log_file: {watcher.log_file!r}\n")
+    
     try:
-        print(f"DEBUG CHILD: About to call watcher.start_daemon with claude_dir={claude_dir}")
-        print(f"DEBUG CHILD: watcher.data_dir = {watcher.data_dir}")
-        print(f"DEBUG CHILD: watcher.log_file = {watcher.log_file}")
         watcher.start_daemon(claude_dir)
     except Exception as e:
+        with open("/tmp/claude_debug.txt", "a") as f:
+            f.write(f"Exception: {str(e)}\n")
+            import traceback
+            f.write(traceback.format_exc())
         print(f"❌ Failed to start daemon: {str(e)}")
-        import traceback
-        traceback.print_exc()
         sys.exit(1)
 
 
