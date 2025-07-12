@@ -281,14 +281,20 @@ class SemanticSearchCLI:
 @click.group()
 @click.option(
     "--data-dir",
-    default=lambda: os.environ.get("CLAUDE_SEARCH_DATA_DIR", "~/.claude-semantic-search/data"),
+    default=None,
     help="Data directory for storage (env: CLAUDE_SEARCH_DATA_DIR)"
 )
 @click.pass_context
 def cli(ctx: click.Context, data_dir: str) -> None:
     """Claude Semantic Search CLI - Index and search your Claude conversations."""
     ctx.ensure_object(dict)
-    ctx.obj["data_dir"] = data_dir
+    
+    # Handle default data directory and expand user path
+    if data_dir is None:
+        data_dir = os.environ.get("CLAUDE_SEARCH_DATA_DIR", "~/.claude-semantic-search/data")
+    
+    # Expand user path to handle ~ properly
+    ctx.obj["data_dir"] = str(Path(data_dir).expanduser())
 
 
 @cli.command()

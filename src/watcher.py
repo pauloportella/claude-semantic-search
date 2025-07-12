@@ -124,14 +124,17 @@ class ConversationWatcher:
     ):
         """Initialize watcher."""
         self.data_dir = data_dir or os.environ.get("CLAUDE_SEARCH_DATA_DIR", "~/.claude-semantic-search/data")
+        # Always expand user path to handle ~ properly, even if already expanded
+        self.data_dir = str(Path(self.data_dir).expanduser())
+        
         self.debounce_seconds = debounce_seconds
         self.use_gpu = use_gpu
-        self.cli_instance = SemanticSearchCLI(data_dir, use_gpu)
+        self.cli_instance = SemanticSearchCLI(self.data_dir, use_gpu)
         self.observer = Observer()
         self.handler = ConversationFileHandler(self.cli_instance, debounce_seconds)
         self.is_running = False
-        self.pid_file = Path(data_dir) / "watcher.pid"
-        self.log_file = Path(data_dir) / "watcher.log"
+        self.pid_file = Path(self.data_dir) / "watcher.pid"
+        self.log_file = Path(self.data_dir) / "watcher.log"
 
     def start_watching(self, claude_dir: str = "~/.claude/projects"):
         """Start watching for file changes."""
@@ -145,12 +148,23 @@ class ConversationWatcher:
         logger.info(f"Starting file watcher for: {claude_path}")
         logger.info(f"Debounce interval: {self.debounce_seconds} seconds")
 
-        # Initialize storage and models
-        self.cli_instance.storage.initialize()
-        if not self.cli_instance.embedder.is_model_loaded:
-            logger.info("Loading embedding model...")
-            self.cli_instance.embedder.load_model()
-            logger.info("Model loaded successfully")
+        # Initialize storage and models with timeout
+        def timeout_handler(signum, frame):
+            raise TimeoutError("Model loading timeout (60s) - consider running 'setup-models' first")
+        
+        # Set 60 second timeout for model loading
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(60)
+        
+        try:
+            self.cli_instance.storage.initialize()
+            if not self.cli_instance.embedder.is_model_loaded:
+                logger.info("Loading embedding model...")
+                self.cli_instance.embedder.load_model()
+                logger.info("Model loaded successfully")
+        finally:
+            # Cancel the alarm
+            signal.alarm(0)
 
         # Start watching recursively
         self.observer.schedule(self.handler, str(claude_path), recursive=True)
@@ -198,8 +212,10 @@ class ConversationWatcher:
 
     def setup_daemon_logging(self):
         """Setup logging for daemon mode."""
+        # Ensure log directory exists
+        self.log_file.parent.mkdir(parents=True, exist_ok=True)
         # Create file handler for daemon logging
-        file_handler = logging.FileHandler(self.log_file)
+        file_handler = logging.FileHandler(str(self.log_file))
         file_handler.setLevel(logging.INFO)
 
         # Create formatter
@@ -219,6 +235,8 @@ class ConversationWatcher:
 
     def write_pid_file(self):
         """Write PID file."""
+        # Ensure directory exists
+        self.pid_file.parent.mkdir(parents=True, exist_ok=True)
         with open(self.pid_file, "w") as f:
             f.write(str(os.getpid()))
         logger.info(f"PID file written: {self.pid_file}")
@@ -323,6 +341,8 @@ def run_watcher(
 ):
     """Run the file watcher in interactive mode."""
     data_dir = data_dir or os.environ.get("CLAUDE_SEARCH_DATA_DIR", "~/.claude-semantic-search/data")
+    # Always expand user path to handle ~ properly, even if already expanded
+    data_dir = str(Path(data_dir).expanduser())
     watcher = ConversationWatcher(data_dir, debounce_seconds, use_gpu)
 
     try:
@@ -340,6 +360,8 @@ def start_daemon(
 ):
     """Start the file watcher as a daemon."""
     data_dir = data_dir or os.environ.get("CLAUDE_SEARCH_DATA_DIR", "~/.claude-semantic-search/data")
+    # Always expand user path to handle ~ properly, even if already expanded  
+    data_dir = str(Path(data_dir).expanduser())
     watcher = ConversationWatcher(data_dir, debounce_seconds, use_gpu)
 
     # Fork process to run in background
@@ -350,7 +372,7 @@ def start_daemon(
             print(f"✅ Watcher daemon started with PID: {pid}")
             print(f"📁 Watching: {claude_dir}")
             print(f"💾 Data directory: {data_dir}")
-            print(f"📝 Log file: {watcher.log_file}")
+            print(f"📝 Log file: {str(watcher.log_file)}")
             return
     except OSError:
         # Fork not supported (Windows), run directly
@@ -367,6 +389,7 @@ def start_daemon(
 def stop_daemon(data_dir: str = None):
     """Stop the file watcher daemon."""
     data_dir = data_dir or os.environ.get("CLAUDE_SEARCH_DATA_DIR", "~/.claude-semantic-search/data")
+    data_dir = str(Path(data_dir).expanduser())  # Expand ~ to full path
     watcher = ConversationWatcher(data_dir)
 
     try:
@@ -383,6 +406,7 @@ def stop_daemon(data_dir: str = None):
 def daemon_status(data_dir: str = None):
     """Check daemon status."""
     data_dir = data_dir or os.environ.get("CLAUDE_SEARCH_DATA_DIR", "~/.claude-semantic-search/data")
+    data_dir = str(Path(data_dir).expanduser())  # Expand ~ to full path
     watcher = ConversationWatcher(data_dir)
 
     if watcher.is_daemon_running():
