@@ -124,14 +124,16 @@ class ConversationWatcher:
     ):
         """Initialize watcher."""
         self.data_dir = data_dir or os.environ.get("CLAUDE_SEARCH_DATA_DIR", "~/.claude-semantic-search/data")
+        # Expand user path to handle ~ properly
+        self.data_dir = str(Path(self.data_dir).expanduser())
         self.debounce_seconds = debounce_seconds
         self.use_gpu = use_gpu
-        self.cli_instance = SemanticSearchCLI(data_dir, use_gpu)
+        self.cli_instance = SemanticSearchCLI(self.data_dir, use_gpu)
         self.observer = Observer()
         self.handler = ConversationFileHandler(self.cli_instance, debounce_seconds)
         self.is_running = False
-        self.pid_file = Path(data_dir) / "watcher.pid"
-        self.log_file = Path(data_dir) / "watcher.log"
+        self.pid_file = Path(self.data_dir) / "watcher.pid"
+        self.log_file = Path(self.data_dir) / "watcher.log"
 
     def start_watching(self, claude_dir: str = "~/.claude/projects"):
         """Start watching for file changes."""
