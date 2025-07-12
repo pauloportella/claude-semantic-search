@@ -123,9 +123,15 @@ class ConversationWatcher:
         self, data_dir: str = None, debounce_seconds: int = 5, use_gpu: bool = False
     ):
         """Initialize watcher."""
+        original_data_dir = data_dir
         self.data_dir = data_dir or os.environ.get("CLAUDE_SEARCH_DATA_DIR", "~/.claude-semantic-search/data")
-        # Expand user path to handle ~ properly
+        # Always expand user path to handle ~ properly, even if already expanded
         self.data_dir = str(Path(self.data_dir).expanduser())
+        
+        print(f"WATCHER INIT DEBUG: original_data_dir = {original_data_dir}")
+        print(f"WATCHER INIT DEBUG: self.data_dir = {self.data_dir}")
+        print(f"WATCHER INIT DEBUG: CWD = {os.getcwd()}")
+        
         self.debounce_seconds = debounce_seconds
         self.use_gpu = use_gpu
         self.cli_instance = SemanticSearchCLI(self.data_dir, use_gpu)
@@ -134,6 +140,8 @@ class ConversationWatcher:
         self.is_running = False
         self.pid_file = Path(self.data_dir) / "watcher.pid"
         self.log_file = Path(self.data_dir) / "watcher.log"
+        
+        print(f"WATCHER INIT DEBUG: self.log_file = {self.log_file}")
 
     def start_watching(self, claude_dir: str = "~/.claude/projects"):
         """Start watching for file changes."""
@@ -211,6 +219,9 @@ class ConversationWatcher:
 
     def setup_daemon_logging(self):
         """Setup logging for daemon mode."""
+        # Debug the exact path being used
+        print(f"DAEMON LOGGING DEBUG: self.log_file = {self.log_file}")
+        print(f"DAEMON LOGGING DEBUG: absolute = {self.log_file.resolve()}")
         # Ensure log directory exists
         self.log_file.parent.mkdir(parents=True, exist_ok=True)
         # Create file handler for daemon logging
@@ -340,7 +351,8 @@ def run_watcher(
 ):
     """Run the file watcher in interactive mode."""
     data_dir = data_dir or os.environ.get("CLAUDE_SEARCH_DATA_DIR", "~/.claude-semantic-search/data")
-    data_dir = str(Path(data_dir).expanduser())  # Expand ~ to full path
+    # Always expand user path to handle ~ properly, even if already expanded
+    data_dir = str(Path(data_dir).expanduser())
     watcher = ConversationWatcher(data_dir, debounce_seconds, use_gpu)
 
     try:
@@ -358,7 +370,8 @@ def start_daemon(
 ):
     """Start the file watcher as a daemon."""
     data_dir = data_dir or os.environ.get("CLAUDE_SEARCH_DATA_DIR", "~/.claude-semantic-search/data")
-    data_dir = str(Path(data_dir).expanduser())  # Expand ~ to full path
+    # Always expand user path to handle ~ properly, even if already expanded  
+    data_dir = str(Path(data_dir).expanduser())
     watcher = ConversationWatcher(data_dir, debounce_seconds, use_gpu)
 
     # Fork process to run in background
