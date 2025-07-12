@@ -123,9 +123,12 @@ class ConversationWatcher:
         self, data_dir: str = None, debounce_seconds: int = 5, use_gpu: bool = False
     ):
         """Initialize watcher."""
+        print(f"DEBUG INIT: input data_dir = {data_dir}")
         self.data_dir = data_dir or os.environ.get("CLAUDE_SEARCH_DATA_DIR", "~/.claude-semantic-search/data")
+        print(f"DEBUG INIT: after default = {self.data_dir}")
         # Expand user path to handle ~ properly
         self.data_dir = str(Path(self.data_dir).expanduser())
+        print(f"DEBUG INIT: after expand = {self.data_dir}")
         self.debounce_seconds = debounce_seconds
         self.use_gpu = use_gpu
         self.cli_instance = SemanticSearchCLI(self.data_dir, use_gpu)
@@ -134,6 +137,7 @@ class ConversationWatcher:
         self.is_running = False
         self.pid_file = Path(self.data_dir) / "watcher.pid"
         self.log_file = Path(self.data_dir) / "watcher.log"
+        print(f"DEBUG INIT: final paths - pid={self.pid_file}, log={self.log_file}")
 
     def start_watching(self, claude_dir: str = "~/.claude/projects"):
         """Start watching for file changes."""
@@ -200,6 +204,12 @@ class ConversationWatcher:
 
     def setup_daemon_logging(self):
         """Setup logging for daemon mode."""
+        # Debug: Print the actual paths
+        print(f"DEBUG: self.data_dir = {self.data_dir}")
+        print(f"DEBUG: self.log_file = {self.log_file}")
+        print(f"DEBUG: self.log_file.parent = {self.log_file.parent}")
+        # Ensure log directory exists
+        self.log_file.parent.mkdir(parents=True, exist_ok=True)
         # Create file handler for daemon logging
         file_handler = logging.FileHandler(self.log_file)
         file_handler.setLevel(logging.INFO)
@@ -221,6 +231,11 @@ class ConversationWatcher:
 
     def write_pid_file(self):
         """Write PID file."""
+        # Debug: Print the actual paths
+        print(f"DEBUG PID: self.data_dir = {self.data_dir}")
+        print(f"DEBUG PID: self.pid_file = {self.pid_file}")
+        # Ensure directory exists
+        self.pid_file.parent.mkdir(parents=True, exist_ok=True)
         with open(self.pid_file, "w") as f:
             f.write(str(os.getpid()))
         logger.info(f"PID file written: {self.pid_file}")
@@ -362,9 +377,14 @@ def start_daemon(
 
     # Child process or non-Unix system
     try:
+        print(f"DEBUG CHILD: About to call watcher.start_daemon with claude_dir={claude_dir}")
+        print(f"DEBUG CHILD: watcher.data_dir = {watcher.data_dir}")
+        print(f"DEBUG CHILD: watcher.log_file = {watcher.log_file}")
         watcher.start_daemon(claude_dir)
     except Exception as e:
         print(f"❌ Failed to start daemon: {str(e)}")
+        import traceback
+        traceback.print_exc()
         sys.exit(1)
 
 
