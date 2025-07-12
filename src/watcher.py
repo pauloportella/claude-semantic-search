@@ -123,14 +123,9 @@ class ConversationWatcher:
         self, data_dir: str = None, debounce_seconds: int = 5, use_gpu: bool = False
     ):
         """Initialize watcher."""
-        original_data_dir = data_dir
         self.data_dir = data_dir or os.environ.get("CLAUDE_SEARCH_DATA_DIR", "~/.claude-semantic-search/data")
         # Always expand user path to handle ~ properly, even if already expanded
         self.data_dir = str(Path(self.data_dir).expanduser())
-        
-        print(f"WATCHER INIT DEBUG: original_data_dir = {original_data_dir}")
-        print(f"WATCHER INIT DEBUG: self.data_dir = {self.data_dir}")
-        print(f"WATCHER INIT DEBUG: CWD = {os.getcwd()}")
         
         self.debounce_seconds = debounce_seconds
         self.use_gpu = use_gpu
@@ -140,8 +135,6 @@ class ConversationWatcher:
         self.is_running = False
         self.pid_file = Path(self.data_dir) / "watcher.pid"
         self.log_file = Path(self.data_dir) / "watcher.log"
-        
-        print(f"WATCHER INIT DEBUG: self.log_file = {self.log_file}")
 
     def start_watching(self, claude_dir: str = "~/.claude/projects"):
         """Start watching for file changes."""
@@ -219,13 +212,10 @@ class ConversationWatcher:
 
     def setup_daemon_logging(self):
         """Setup logging for daemon mode."""
-        # Debug the exact path being used
-        print(f"DAEMON LOGGING DEBUG: self.log_file = {self.log_file}")
-        print(f"DAEMON LOGGING DEBUG: absolute = {self.log_file.resolve()}")
         # Ensure log directory exists
         self.log_file.parent.mkdir(parents=True, exist_ok=True)
         # Create file handler for daemon logging
-        file_handler = logging.FileHandler(self.log_file)
+        file_handler = logging.FileHandler(str(self.log_file))
         file_handler.setLevel(logging.INFO)
 
         # Create formatter
@@ -382,7 +372,7 @@ def start_daemon(
             print(f"✅ Watcher daemon started with PID: {pid}")
             print(f"📁 Watching: {claude_dir}")
             print(f"💾 Data directory: {data_dir}")
-            print(f"📝 Log file: {watcher.log_file}")
+            print(f"📝 Log file: {str(watcher.log_file)}")
             return
     except OSError:
         # Fork not supported (Windows), run directly
