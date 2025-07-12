@@ -178,16 +178,16 @@ Restart the applications and search naturally:
 
 ```bash
 # Index all Claude conversations (incremental - only new/modified files)
-uv run claude-index
+claude-index
 
 # Index from a specific directory
-uv run claude-index --claude-dir /path/to/conversations
+claude-index --claude-dir /path/to/conversations
 
 # Force reindexing of all files (clears existing data)
-uv run claude-index --force
+claude-index --force
 
 # Use GPU acceleration (5-10x faster)
-uv run claude-index --gpu
+claude-index --gpu
 ```
 
 **Incremental Indexing**: By default, `claude-index` only processes files that have been added or modified since the last indexing. This makes subsequent runs much faster. Use `--force` to clear all data and reindex everything from scratch.
@@ -196,52 +196,54 @@ uv run claude-index --gpu
 
 ```bash
 # Basic search
-uv run claude-search "rust programming"
+claude-search "rust programming"
 
 # Search with filters (project names support partial matching)
-uv run claude-search "error handling" --project "my-project" --has-code
-uv run claude-search "persistence" --project "daisy-hft"  # Matches any project containing "daisy-hft"
+claude-search "error handling" --project "my-project" --has-code
+claude-search "persistence" --project "daisy-hft"  # Matches any project containing "daisy-hft"
 
 # Limit results
-uv run claude-search "debugging" --top-k 5
+claude-search "debugging" --top-k 5
 
 # JSON output (for Alfred integration)
-uv run claude-search "python testing" --json
+claude-search "python testing" --json
 
 # Use GPU acceleration for faster search
-uv run claude-search "machine learning" --gpu
+claude-search "machine learning" --gpu
 ```
 
 #### 3. View Statistics
 
 ```bash
 # Show index statistics
-uv run claude-stats
+claude-stats
 ```
 
 #### 4. Watch for Changes (Daemon Mode)
 
 ```bash
 # Start watcher daemon (uses incremental indexing)
-uv run claude-start
+claude-start
 
 # Start with custom settings
-uv run claude-start --claude-dir /path/to/conversations --debounce 10
+claude-start --claude-dir /path/to/conversations --debounce 10
 
 # Check daemon status
-uv run claude-status
+claude-status
 
 # Stop daemon
-uv run claude-stop
+claude-stop
 
 # Interactive watch mode (foreground)
-uv run claude-watch
+claude-watch
 
 # Run watch as daemon (background)
-uv run claude-watch --daemon
+claude-watch --daemon
 ```
 
 **Auto-indexing**: The daemon watches for new or modified files and automatically indexes them using incremental indexing. When a file changes, only that file and other files in the same directory are checked for updates.
+
+> **Note**: The commands above assume you used the recommended installation method (`./install.sh` or `uv tool install .`). If you're running from the source directory without global installation, prefix commands with `uv run` (e.g., `uv run claude-search "query"`).
 
 ### Advanced Usage
 
@@ -262,25 +264,25 @@ uv run claude-watch --daemon
 
 ```bash
 # Find Rust-related conversations with code
-uv run claude-search "rust async" --has-code
+claude-search "rust async" --has-code
 
 # Search in specific project
-uv run claude-search "database migration" --project "my-app"
+claude-search "database migration" --project "my-app"
 
 # Get top 20 results about testing
-uv run claude-search "unit testing" --top-k 20
+claude-search "unit testing" --top-k 20
 
 # Filter by date range
-uv run claude-search "kubernetes deployment" --after 2024-01-01 --before 2024-12-31
+claude-search "kubernetes deployment" --after 2024-01-01 --before 2024-12-31
 
 # Get specific chunk with full content
-uv run claude-search --chunk-id "chunk_abc123" --full-content
+claude-search --chunk-id "chunk_abc123" --full-content
 
 # Find related chunks in same session
-uv run claude-search --related-to "chunk_abc123" --same-session
+claude-search --related-to "chunk_abc123" --same-session
 
 # Search within specific session
-uv run claude-search "error handling" --session "session_xyz789"
+claude-search "error handling" --session "session_xyz789"
 ```
 
 ## GPU Acceleration
@@ -306,8 +308,8 @@ python -c "import faiss; print(f'FAISS GPU count: {faiss.get_num_gpus()}')"
 # No additional installation needed! 
 
 # Verify MPS availability
-uv run python -c "import torch; print(f'MPS available: {torch.backends.mps.is_available()}')"
-uv run claude-stats --gpu
+python -c "import torch; print(f'MPS available: {torch.backends.mps.is_available()}')"
+claude-stats --gpu
 ```
 
 ### Requirements
@@ -326,16 +328,16 @@ uv run claude-stats --gpu
 
 ```bash
 # GPU-accelerated indexing (10-100x faster embedding generation)
-uv run claude-index --gpu
+claude-index --gpu
 
 # GPU-accelerated search (5-10x faster vector search)
-uv run claude-search "your query" --gpu
+claude-search "your query" --gpu
 
 # View GPU status and memory usage
-uv run claude-stats --gpu
+claude-stats --gpu
 
 # Start GPU-enabled daemon
-uv run claude-start --gpu
+claude-start --gpu
 ```
 
 ### Performance Benefits
@@ -370,7 +372,7 @@ python -c "import torch; print(torch.cuda.get_device_name(0))"
 python -c "import faiss; print(f'GPU count: {faiss.get_num_gpus()}')"
 
 # Check installation
-uv run claude-stats --gpu
+claude-stats --gpu
 ```
 
 If GPU support fails, the system automatically falls back to CPU with a warning message.
@@ -454,7 +456,7 @@ This will build and install the workflow. Then configure your paths in Alfred Pr
 The CLI provides JSON output for custom Alfred workflows:
 
 ```bash
-uv run claude-search "your query" --json
+claude-search "your query" --json
 ```
 
 ## MCP Server Integration
@@ -601,10 +603,10 @@ The system uses:
 2. **Empty Search Results**
    ```bash
    # Check if index exists
-   uv run claude-stats
+   claude-stats
    
    # Rebuild index
-   uv run claude-index --force
+   claude-index --force
    ```
 
 3. **Permission Errors**
