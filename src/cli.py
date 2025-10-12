@@ -22,6 +22,7 @@ from tqdm import tqdm
 
 from .chunker import Chunk, ChunkingConfig, ConversationChunker
 from .embeddings import EmbeddingConfig, EmbeddingGenerator
+from .gpu_utils import quick_gpu_check
 from .parser import JSONLParser
 from .storage import HybridStorage, SearchConfig, StorageConfig
 
@@ -35,11 +36,16 @@ logger: logging.Logger = logging.getLogger(__name__)
 class SemanticSearchCLI:
     """Main CLI class for semantic search operations."""
 
-    def __init__(self, data_dir: str = "~/.claude-semantic-search/data", use_gpu: bool = False) -> None:
+    def __init__(self, data_dir: str = "~/.claude-semantic-search/data", use_gpu: Optional[bool] = None) -> None:
         """Initialize CLI with data directory and GPU option."""
         self.data_dir: Path = Path(data_dir).expanduser()
         self.data_dir.mkdir(parents=True, exist_ok=True)
-        self.use_gpu: bool = use_gpu
+
+        # Auto-detect GPU if not explicitly set
+        if use_gpu is None:
+            self.use_gpu: bool = quick_gpu_check()
+        else:
+            self.use_gpu = use_gpu
 
         # Initialize components
         self.parser: JSONLParser = JSONLParser()
@@ -50,7 +56,7 @@ class SemanticSearchCLI:
             model_name="all-mpnet-base-v2",
             batch_size=8,  # Will be auto-adjusted for GPU
             cache_dir=str(self.data_dir / "models"),
-            use_gpu=use_gpu,
+            use_gpu=self.use_gpu,
             auto_batch_size=True,
         )
         self.embedder: EmbeddingGenerator = EmbeddingGenerator(embedding_config)
@@ -60,7 +66,7 @@ class SemanticSearchCLI:
             data_dir=str(self.data_dir),
             embedding_dim=768,
             auto_save=True,
-            use_gpu=use_gpu,
+            use_gpu=self.use_gpu,
         )
         self.storage: HybridStorage = HybridStorage(storage_config)
 
@@ -302,11 +308,12 @@ def cli(ctx: click.Context, data_dir: str) -> None:
     "--claude-dir", default="~/.claude/projects", help="Claude projects directory"
 )
 @click.option("--force", is_flag=True, help="Force reindexing of all files")
-@click.option("--gpu", is_flag=True, help="Use GPU acceleration for faster indexing")
+@click.option("--no-gpu", is_flag=True, help="Disable GPU acceleration (use CPU only)")
 @click.pass_context
-def index(ctx: click.Context, claude_dir: str, force: bool, gpu: bool) -> None:
+def index(ctx: click.Context, claude_dir: str, force: bool, no_gpu: bool) -> None:
     """Index Claude conversations for semantic search."""
-    cli_instance = SemanticSearchCLI(ctx.obj["data_dir"], use_gpu=gpu)
+    use_gpu = False if no_gpu else None  # None = auto-detect
+    cli_instance = SemanticSearchCLI(ctx.obj["data_dir"], use_gpu=use_gpu)
 
     # Scan for files
     files = cli_instance.scan_claude_projects(claude_dir)
@@ -354,7 +361,7 @@ def index(ctx: click.Context, claude_dir: str, force: bool, gpu: bool) -> None:
 @click.option(
     "--chunk-id", help="Get specific chunk by ID (ignores query and other filters)"
 )
-@click.option("--gpu", is_flag=True, help="Use GPU acceleration for faster search")
+@click.option("--no-gpu", is_flag=True, help="Disable GPU acceleration (use CPU only)")
 @click.option("--json", "output_json", is_flag=True, help="Output results as JSON")
 @click.pass_context
 def search(
@@ -370,11 +377,12 @@ def search(
     same_session: bool,
     full_content: bool,
     chunk_id: Optional[str],
-    gpu: bool,
+    no_gpu: bool,
     output_json: bool,
 ) -> None:
     """Search through indexed conversations."""
-    cli_instance = SemanticSearchCLI(ctx.obj["data_dir"], use_gpu=gpu)
+    use_gpu = False if no_gpu else None  # None = auto-detect
+    cli_instance = SemanticSearchCLI(ctx.obj["data_dir"], use_gpu=use_gpu)
 
     # Handle direct chunk retrieval
     if chunk_id:
@@ -667,11 +675,12 @@ def search(
 
 
 @cli.command()
-@click.option("--gpu", is_flag=True, help="Show GPU information")
+@click.option("--no-gpu", is_flag=True, help="Disable GPU acceleration (use CPU only)")
 @click.pass_context
-def stats(ctx: click.Context, gpu: bool) -> None:
+def stats(ctx: click.Context, no_gpu: bool) -> None:
     """Show statistics about the current index."""
-    cli_instance = SemanticSearchCLI(ctx.obj["data_dir"], use_gpu=gpu)
+    use_gpu = False if no_gpu else None  # None = auto-detect
+    cli_instance = SemanticSearchCLI(ctx.obj["data_dir"], use_gpu=use_gpu)
 
     try:
         stats = cli_instance.get_index_stats()
@@ -725,10 +734,12 @@ def stats(ctx: click.Context, gpu: bool) -> None:
 )
 @click.option("--debounce", default=5, help="Debounce interval in seconds (default: 5)")
 @click.option("--daemon", is_flag=True, help="Run as background daemon")
-@click.option("--gpu", is_flag=True, help="Use GPU acceleration for indexing")
+@click.option("--no-gpu", is_flag=True, help="Disable GPU acceleration (use CPU only)")
 @click.pass_context
-def watch(ctx: click.Context, claude_dir: str, debounce: int, daemon: bool, gpu: bool) -> None:
+def watch(ctx: click.Context, claude_dir: str, debounce: int, daemon: bool, no_gpu: bool) -> None:
     """Watch Claude conversations for changes and auto-index them."""
+    use_gpu = False if no_gpu else None  # None = auto-detect
+
     if daemon:
         from .watcher import start_daemon
 
@@ -736,7 +747,7 @@ def watch(ctx: click.Context, claude_dir: str, debounce: int, daemon: bool, gpu:
             data_dir=ctx.obj["data_dir"],
             claude_dir=claude_dir,
             debounce_seconds=debounce,
-            use_gpu=gpu,
+            use_gpu=use_gpu if use_gpu is not None else quick_gpu_check(),
         )
     else:
         from .watcher import run_watcher
@@ -753,7 +764,7 @@ def watch(ctx: click.Context, claude_dir: str, debounce: int, daemon: bool, gpu:
                 data_dir=ctx.obj["data_dir"],
                 claude_dir=claude_dir,
                 debounce_seconds=debounce,
-                use_gpu=gpu,
+                use_gpu=use_gpu if use_gpu is not None else quick_gpu_check(),
             )
         except KeyboardInterrupt:
             click.echo("\n👋 File watcher stopped")
@@ -769,17 +780,19 @@ def watch(ctx: click.Context, claude_dir: str, debounce: int, daemon: bool, gpu:
     help="Claude projects directory to watch",
 )
 @click.option("--debounce", default=5, help="Debounce interval in seconds (default: 5)")
-@click.option("--gpu", is_flag=True, help="Use GPU acceleration for indexing")
+@click.option("--no-gpu", is_flag=True, help="Disable GPU acceleration (use CPU only)")
 @click.pass_context
-def start(ctx: click.Context, claude_dir: str, debounce: int, gpu: bool) -> None:
+def start(ctx: click.Context, claude_dir: str, debounce: int, no_gpu: bool) -> None:
     """Start the file watcher daemon."""
     from .watcher import start_daemon
+
+    use_gpu = False if no_gpu else quick_gpu_check()
 
     start_daemon(
         data_dir=ctx.obj["data_dir"],
         claude_dir=claude_dir,
         debounce_seconds=debounce,
-        use_gpu=gpu,
+        use_gpu=use_gpu,
     )
 
 

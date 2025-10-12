@@ -38,6 +38,7 @@ class EmbeddingConfig:
     normalize_embeddings: bool = True
     show_progress: bool = True
     cache_dir: Optional[str] = None
+    mixed_precision: str = "auto"  # "auto", "fp16", "bf16", "fp32" - auto uses bf16 on GPU
 
 
 @dataclass
@@ -116,14 +117,16 @@ class EmbeddingGenerator:
             # Get embedding dimension
             self._embedding_dim = self.model.get_sentence_embedding_dimension()
 
-            device_info = (
-                str(self.model.device)
-                if hasattr(self.model, "device")
-                else target_device
-            )
+            # Log the target device we set (model.device may not reflect actual device)
             self.logger.info(
-                f"Model loaded successfully on {device_info}. Embedding dimension: {self._embedding_dim}"
+                f"Model loaded successfully on {target_device}. Embedding dimension: {self._embedding_dim}"
             )
+
+            # Log mixed precision setting
+            if self.config.use_gpu and "cuda" in target_device:
+                precision = self._get_precision_dtype()
+                if precision is not None:
+                    self.logger.info(f"Using mixed precision: {precision}")
 
             # Log GPU status if requested
             if self.config.use_gpu and self._gpu_capability:
@@ -153,8 +156,23 @@ class EmbeddingGenerator:
             else:
                 return "cpu"
         else:
-            # No GPU available, use CPU
             return "cpu"
+
+    def _get_precision_dtype(self) -> Optional[torch.dtype]:
+        """Determine precision dtype based on config and device."""
+        if self.config.mixed_precision == "fp32":
+            return None  # No autocast
+        elif self.config.mixed_precision == "fp16":
+            return torch.float16
+        elif self.config.mixed_precision == "bf16":
+            return torch.bfloat16
+        elif self.config.mixed_precision == "auto":
+            # Use bf16 on GPU (CUDA/ROCm), fp32 on CPU/MPS
+            if self.model and self.config.use_gpu:
+                device_str = str(self.model.device).lower()
+                if "cuda" in device_str:
+                    return torch.bfloat16
+        return None
 
     def generate_embeddings(self, chunks: List[Chunk]) -> List[np.ndarray]:
         """Generate embeddings for a list of chunks."""
@@ -212,14 +230,27 @@ class EmbeddingGenerator:
             else:
                 validated_texts.append(text)
 
-        # Generate embeddings with progress bar
-        embeddings = self.model.encode(
-            validated_texts,
-            batch_size=self.config.batch_size,
-            normalize_embeddings=self.config.normalize_embeddings,
-            show_progress_bar=self.config.show_progress,
-            convert_to_numpy=True,
-        )
+        # Determine if we should use mixed precision
+        precision_dtype = self._get_precision_dtype()
+
+        # Generate embeddings with optional mixed precision
+        if precision_dtype and self.config.use_gpu:
+            with torch.amp.autocast('cuda', dtype=precision_dtype):
+                embeddings = self.model.encode(
+                    validated_texts,
+                    batch_size=self.config.batch_size,
+                    normalize_embeddings=self.config.normalize_embeddings,
+                    show_progress_bar=self.config.show_progress,
+                    convert_to_numpy=True,
+                )
+        else:
+            embeddings = self.model.encode(
+                validated_texts,
+                batch_size=self.config.batch_size,
+                normalize_embeddings=self.config.normalize_embeddings,
+                show_progress_bar=self.config.show_progress,
+                convert_to_numpy=True,
+            )
 
         generation_time = time.time() - start_time
 
@@ -228,9 +259,14 @@ class EmbeddingGenerator:
             throughput = len(texts) / generation_time if generation_time > 0 else 0
             avg_length = np.mean([len(text) for text in texts])
 
+            precision_info = ""
+            if precision_dtype:
+                precision_name = "BF16" if precision_dtype == torch.bfloat16 else "FP16"
+                precision_info = f", {precision_name}"
+
             self.logger.info(
                 f"Generated {len(texts)} embeddings in {generation_time:.2f}s "
-                f"({throughput:.1f} chunks/s, avg length: {avg_length:.0f} chars)"
+                f"({throughput:.1f} chunks/s, avg length: {avg_length:.0f} chars{precision_info})"
             )
 
         return embeddings
