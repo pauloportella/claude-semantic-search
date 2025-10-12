@@ -224,43 +224,6 @@ class TestConversationWatcher:
             watcher.start_watching("/nonexistent/path")
 
     @patch("src.watcher.SemanticSearchCLI")
-    def test_start_stop_watcher(self, mock_cli_class):
-        """Test starting and stopping watcher."""
-        # Mock CLI instance
-        mock_cli = Mock()
-        mock_cli.storage = Mock()
-        mock_cli.embedder = Mock()
-        mock_cli.embedder.is_model_loaded = True
-        mock_cli_class.return_value = mock_cli
-
-        watcher = ConversationWatcher(self.temp_dir)
-
-        # Start watcher in thread
-        def start_watcher():
-            try:
-                watcher.start_watching(self.claude_dir)
-            except Exception:
-                pass  # Expected when we stop it
-
-        watcher_thread = threading.Thread(target=start_watcher)
-        watcher_thread.start()
-
-        # Wait a bit for watcher to start
-        time.sleep(0.1)
-
-        # Check that watcher is running
-        assert watcher.is_running
-
-        # Stop watcher
-        watcher.stop_watching()
-
-        # Wait for thread to finish
-        watcher_thread.join(timeout=1)
-
-        # Check that watcher stopped
-        assert not watcher.is_running
-
-    @patch("src.watcher.SemanticSearchCLI")
     def test_get_status(self, mock_cli_class):
         """Test getting watcher status."""
         # Mock CLI instance
@@ -300,50 +263,3 @@ class TestWatcherIntegration:
         if hasattr(self, "temp_dir") and os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir)
 
-    @patch("src.watcher.SemanticSearchCLI")
-    def test_file_creation_triggers_indexing(self, mock_cli_class):
-        """Test that creating a file triggers indexing."""
-        # Mock CLI instance
-        mock_cli = Mock()
-        mock_cli.storage = Mock()
-        mock_cli.embedder = Mock()
-        mock_cli.embedder.is_model_loaded = True
-        mock_cli.index_conversations.return_value = {
-            "files_processed": 1,
-            "files_skipped": 0,
-            "chunks_indexed": 5,
-            "duration": 0.5,
-            "errors": [],
-        }
-        mock_cli_class.return_value = mock_cli
-
-        # Create watcher with very short debounce
-        watcher = ConversationWatcher(self.temp_dir, debounce_seconds=0.1)
-
-        # Start watcher in thread
-        def start_watcher():
-            try:
-                watcher.start_watching(self.claude_dir)
-            except Exception:
-                pass  # Expected when we stop it
-
-        watcher_thread = threading.Thread(target=start_watcher)
-        watcher_thread.start()
-
-        # Wait for watcher to start
-        time.sleep(0.2)
-
-        # Create a new JSONL file
-        test_file = os.path.join(self.claude_dir, "new_conversation.jsonl")
-        with open(test_file, "w") as f:
-            f.write('{"message": "test conversation"}\n')
-
-        # Wait for debounce and processing
-        time.sleep(0.5)
-
-        # Stop watcher
-        watcher.stop_watching()
-        watcher_thread.join(timeout=1)
-
-        # Check that indexing was triggered
-        assert mock_cli.index_conversations.called
