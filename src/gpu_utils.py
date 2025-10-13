@@ -34,17 +34,27 @@ def detect_torch_gpu() -> Tuple[bool, Dict[str, Any]]:
     try:
         import torch
 
-        # Check for CUDA first
+        # Check for CUDA/ROCm (ROCm exposes same API as CUDA)
         if torch.cuda.is_available():
             gpu_count = torch.cuda.device_count()
             if gpu_count > 0:
-                # Get CUDA GPU information
+                # Determine backend (CUDA or ROCm)
+                backend = "cuda"
+                rocm_version = None
+                if hasattr(torch.version, "hip") and torch.version.hip:
+                    backend = "rocm"
+                    rocm_version = torch.version.hip
+
+                # Get GPU information (same API for CUDA/ROCm)
                 gpu_info = {
-                    "backend": "cuda",
+                    "backend": backend,
                     "gpu_count": gpu_count,
                     "current_device": torch.cuda.current_device(),
                     "devices": [],
                 }
+
+                if rocm_version:
+                    gpu_info["rocm_version"] = rocm_version
 
                 for i in range(gpu_count):
                     props = torch.cuda.get_device_properties(i)
@@ -60,6 +70,11 @@ def detect_torch_gpu() -> Tuple[bool, Dict[str, Any]]:
                         "memory_free_gb": memory_free / (1024**3),
                         "compute_capability": f"{props.major}.{props.minor}",
                     }
+
+                    # Add ROCm-specific info if available
+                    if backend == "rocm" and hasattr(props, "gcnArchName"):
+                        device_info["gcn_arch"] = props.gcnArchName
+
                     gpu_info["devices"].append(device_info)
 
                 return True, gpu_info
@@ -182,11 +197,14 @@ def calculate_optimal_batch_size(
 
     batch_size = int(working_memory / memory_per_item)
 
-    # Clamp to reasonable values
+    # Clamp to reasonable values based on backend
     # MPS has different performance characteristics - cap at 64 for optimal performance
     if backend == "mps":
         batch_size = max(8, min(batch_size, 64))
-    else:
+    elif backend == "rocm":
+        # ROCm can handle larger batches similar to CUDA
+        batch_size = max(8, min(batch_size, 256))
+    else:  # cuda
         batch_size = max(8, min(batch_size, 256))
 
     return batch_size
@@ -206,6 +224,9 @@ def assess_gpu_capability(
     faiss_available, faiss_info = detect_faiss_gpu()
     capability.faiss_gpu_available = faiss_available
 
+    # Determine backend early so we can use it later
+    backend = torch_info.get("backend", "unknown") if torch_available else "none"
+
     if torch_available and "devices" in torch_info:
         # Use the first GPU for calculations
         primary_gpu = torch_info["devices"][0]
@@ -217,11 +238,10 @@ def assess_gpu_capability(
         # Calculate optimal batch size
         memory_gb = primary_gpu["memory_free_gb"]
         capability.recommended_batch_size = calculate_optimal_batch_size(
-            memory_gb, embedding_dim
+            memory_gb, embedding_dim, backend=backend
         )
 
     # Determine if GPU can be used
-    backend = torch_info.get("backend", "unknown") if torch_available else "none"
 
     if torch_available:
         if backend == "mps":
@@ -230,6 +250,15 @@ def assess_gpu_capability(
             capability.status_message = (
                 "✅ Apple Silicon MPS ready (embeddings accelerated, search on CPU)"
             )
+        elif backend == "rocm":
+            # AMD ROCm: embeddings accelerated, FAISS on CPU (no ROCm FAISS support)
+            capability.can_use_gpu = True
+            rocm_ver = torch_info.get("rocm_version", "unknown")
+            if capability.gpu_memory_free:
+                available_gb = capability.gpu_memory_free / (1024**3)
+                capability.status_message = f"✅ AMD ROCm ready (ROCm {rocm_ver}, {available_gb:.1f}GB, embeddings accelerated, search on CPU)"
+            else:
+                capability.status_message = f"✅ AMD ROCm ready (ROCm {rocm_ver}, embeddings accelerated, search on CPU)"
         elif backend == "cuda" and faiss_available:
             # CUDA: both embeddings and FAISS accelerated
             if capability.gpu_memory_free:

@@ -10,9 +10,99 @@ if ! command -v uv &> /dev/null; then
     exit 1
 fi
 
+# Detect GPU type
+detect_gpu() {
+    # Check for AMD ROCm
+    if command -v rocminfo &> /dev/null || [ -d /sys/class/kfd ]; then
+        echo "amd"
+        return
+    fi
+
+    # Check for NVIDIA GPU
+    if command -v nvidia-smi &> /dev/null; then
+        echo "nvidia"
+        return
+    fi
+
+    # Check for Apple Silicon
+    if [[ "$OSTYPE" == "darwin"* ]] && [ "$(uname -m)" == "arm64" ]; then
+        echo "apple"
+        return
+    fi
+
+    echo "none"
+}
+
+gpu_type=$(detect_gpu)
+install_gpu_support=false
+
+# Check if user wants GPU support
+if [ "$gpu_type" != "none" ]; then
+    echo ""
+    echo "GPU Detection"
+    echo "============="
+    case "$gpu_type" in
+        amd)
+            echo "✅ AMD GPU detected (ROCm)"
+            echo ""
+            read -p "Install PyTorch with ROCm for GPU-accelerated embeddings? (Y/n) " -r
+            echo ""
+            # Default to yes if empty
+            if [[ -z "$REPLY" ]] || [[ $REPLY =~ ^[Yy]$ ]]; then
+                install_gpu_support=true
+            fi
+            ;;
+        nvidia)
+            echo "✅ NVIDIA GPU detected"
+            echo ""
+            echo "For GPU support, install with conda first:"
+            echo "  conda install pytorch torchvision torchaudio pytorch-cuda=12.1 -c pytorch -c nvidia"
+            echo "  conda install faiss-gpu -c conda-forge"
+            echo ""
+            read -p "Have you already installed CUDA PyTorch via conda? (y/N) " -r
+            echo ""
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                install_gpu_support=true
+            fi
+            ;;
+        apple)
+            echo "✅ Apple Silicon detected"
+            echo "PyTorch with MPS support is included in base installation."
+            install_gpu_support=true
+            ;;
+    esac
+fi
+
+# Clean up Python bytecode cache to ensure fresh install
+echo ""
+echo "Cleaning Python cache..."
+find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+find . -type f -name "*.pyc" -delete 2>/dev/null || true
+
 # Install the tool
+echo ""
 echo "Installing claude-semantic-search..."
-uv tool install .
+uv tool install . --force --reinstall
+
+# Install GPU-specific packages after main installation
+if [ "$install_gpu_support" = true ] && [ "$gpu_type" = "amd" ]; then
+    echo ""
+    echo "Replacing PyTorch with ROCm version in tool environment..."
+
+    # Get the tool's python executable path
+    tool_python=$(uv tool run --from claude-semantic-search -- python -c "import sys; print(sys.executable)")
+
+    # Remove CUDA versions of torch and triton
+    echo "Removing CUDA PyTorch..."
+    uv pip uninstall -y torch triton --python "$tool_python" --quiet 2>/dev/null || true
+
+    # Install ROCm versions
+    echo "Installing ROCm PyTorch..."
+    uv pip install --pre torch pytorch-triton-rocm --index-url https://download.pytorch.org/whl/nightly/rocm7.0 --python "$tool_python" --quiet
+
+    echo "✅ PyTorch with ROCm installed in tool environment"
+    echo "Note: Embeddings will use GPU. FAISS search uses CPU (no ROCm support)."
+fi
 
 # Download the embedding model
 echo ""
@@ -25,10 +115,10 @@ echo "Data Directory Configuration"
 echo "============================"
 echo "By default, semantic search data will be stored in: ~/.claude-semantic-search/data"
 echo ""
-read -p "Use the default location? (y/n) " -n 1 -r
+read -p "Use the default location? (Y/n) " -r
 echo ""
 
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+if [[ -n "$REPLY" ]] && [[ ! $REPLY =~ ^[Yy]$ ]]; then
     echo "Please enter your preferred data directory path:"
     read -r custom_data_dir
     export CLAUDE_SEARCH_DATA_DIR="$custom_data_dir"
@@ -132,9 +222,9 @@ echo "Please restart these applications to use the semantic search features."
 echo ""
 
 # Prompt for indexing
-read -p "Would you like to index your Claude conversations now? (y/n) " -n 1 -r
+read -p "Would you like to index your Claude conversations now? (Y/n) " -r
 echo ""
-if [[ $REPLY =~ ^[Yy]$ ]]; then
+if [[ -z "$REPLY" ]] || [[ $REPLY =~ ^[Yy]$ ]]; then
     echo "Starting indexing..."
     claude-index
     echo ""
