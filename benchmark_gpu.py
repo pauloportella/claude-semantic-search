@@ -41,7 +41,7 @@ def benchmark_baseline(model, texts, batch_size=256):
     return elapsed, throughput
 
 
-def benchmark_fp16(model, texts, batch_size=256):
+def benchmark_fp16(model, texts, batch_size=256, baseline_throughput=None):
     """Test with FP16 mixed precision"""
     print(f"\n{'='*60}")
     print(f"FP16 MIXED PRECISION, batch_size={batch_size}")
@@ -67,7 +67,8 @@ def benchmark_fp16(model, texts, batch_size=256):
         throughput = len(texts) / elapsed
         print(f"Time: {elapsed:.2f}s")
         print(f"Throughput: {throughput:.1f} sentences/s")
-        print(f"Speedup: {throughput / (len(texts) / elapsed):.2f}x")
+        if baseline_throughput:
+            print(f"Speedup: {throughput / baseline_throughput:.2f}x")
 
         # Restore FP32
         if hasattr(model, '_first_module'):
@@ -79,7 +80,7 @@ def benchmark_fp16(model, texts, batch_size=256):
         return None, None
 
 
-def benchmark_bfloat16(model, texts, batch_size=256):
+def benchmark_bfloat16(model, texts, batch_size=256, baseline_throughput=None):
     """Test with BF16 mixed precision"""
     print(f"\n{'='*60}")
     print(f"BFLOAT16 MIXED PRECISION, batch_size={batch_size}")
@@ -101,6 +102,8 @@ def benchmark_bfloat16(model, texts, batch_size=256):
         throughput = len(texts) / elapsed
         print(f"Time: {elapsed:.2f}s")
         print(f"Throughput: {throughput:.1f} sentences/s")
+        if baseline_throughput:
+            print(f"Speedup: {throughput / baseline_throughput:.2f}x")
 
         return elapsed, throughput
     except Exception as e:
@@ -164,9 +167,9 @@ def main():
     # Run benchmarks
     baseline_time, baseline_throughput = benchmark_baseline(model, test_texts, batch_size=256)
 
-    fp16_time, fp16_throughput = benchmark_fp16(model, test_texts, batch_size=256)
+    fp16_time, fp16_throughput = benchmark_fp16(model, test_texts, batch_size=256, baseline_throughput=baseline_throughput)
 
-    bf16_time, bf16_throughput = benchmark_bfloat16(model, test_texts, batch_size=256)
+    bf16_time, bf16_throughput = benchmark_bfloat16(model, test_texts, batch_size=256, baseline_throughput=baseline_throughput)
 
     batch_results = benchmark_batch_sizes(model, test_texts)
 

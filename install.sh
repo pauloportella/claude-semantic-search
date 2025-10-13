@@ -94,7 +94,7 @@ if [ "$install_gpu_support" = true ] && [ "$gpu_type" = "amd" ]; then
 
     # Remove CUDA versions of torch and triton
     echo "Removing CUDA PyTorch..."
-    uv pip uninstall torch triton --python "$tool_python" --quiet 2>/dev/null || true
+    uv pip uninstall -y torch triton --python "$tool_python" --quiet 2>/dev/null || true
 
     # Install ROCm versions
     echo "Installing ROCm PyTorch..."
